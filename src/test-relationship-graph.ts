@@ -63,7 +63,7 @@ async function test() {
   const alishaRels = db.getEntityRelationships(alisha.id, 'incoming');
   console.log(`\n   Alisha's incoming relationships: ${alishaRels.length}`);
   alishaRels.forEach(r => {
-    console.log(`   - ${r.relationship_type} ← ${r.source_name}`);
+    console.log(`   - ${(r as any).relationship_type} ← ${(r as any).source_name}`);
   });
   
   // 4. Test findRelatedEntities
@@ -71,7 +71,7 @@ async function test() {
   const carolineRelated = db.findRelatedEntities(caroline.id);
   console.log(`   Caroline's related entities: ${carolineRelated.length}`);
   carolineRelated.forEach(r => {
-    console.log(`   - ${r.related_entity_name} (${r.relationship_type})`);
+    console.log(`   - ${(r as any).related_entity_name} (${(r as any).relationship_type})`);
   });
   
   // 5. Test traversal
@@ -87,8 +87,8 @@ async function test() {
   console.log('   Step 1: Find Phillip\'s partner...');
   const phillipPartner = db.findRelatedEntities(phillip.id, 'is_partner_of');
   if (phillipPartner.length > 0) {
-    const partnerId = (phillipPartner[0] as any).related_entity_id || phillipPartner[0].relatedEntityId;
-    const partnerName = (phillipPartner[0] as any).related_entity_name || phillipPartner[0].relatedEntityName;
+    const partnerId = phillipPartner[0].relatedEntityId;
+    const partnerName = phillipPartner[0].relatedEntityName;
     console.log(`   Found partner: ${partnerName}`);
     
     // Step 2: Query facts for the partner
