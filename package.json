@@ -6,8 +6,13 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "migrate": "psql $DATABASE_URL -f src/schema.sql",
+    "migrate:local": "psql postgresql://muninn:muninn@localhost:5432/muninn_v2 -f src/schema.sql",
     "test": "tsx src/tests/",
-    "mcp": "tsx src/mcp/server.ts"
+    "mcp": "tsx src/mcp/server.ts",
+    "setup:local": "./setup.sh local",
+    "setup:neon": "./setup.sh neon"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
