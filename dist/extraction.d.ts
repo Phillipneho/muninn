@@ -19,6 +19,11 @@ export declare function resolveEntities(extracted: ExtractedEntity[], existing: 
 export declare function detectContradictions(newFact: ExtractedFact, existingFacts: ExtractedFact[]): Array<{
     fact: ExtractedFact;
     type: 'value_conflict' | 'temporal_overlap' | 'logical';
+    stateChange?: {
+        oldValue: string;
+        newValue: string;
+    };
+    isTransient?: boolean;
 }>;
 export declare function scoreConfidence(fact: ExtractedFact, speaker?: string): number;
 //# sourceMappingURL=extraction.d.ts.map

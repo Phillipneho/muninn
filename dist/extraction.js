@@ -261,9 +261,24 @@ function levenshteinDistance(a, b) {
     }
     return matrix[b.length][a.length];
 }
-// Enhanced contradiction detection
+// Enhanced contradiction detection with state change tracking
 export function detectContradictions(newFact, existingFacts) {
     const contradictions = [];
+    // Predicates that are transient (temporary states) - don't create events
+    // These represent fleeting states, not permanent life changes
+    const TRANSIENT_PATTERNS = [
+        'is_at', 'is_with', 'is_feeling', 'mood', 'current_activity',
+        'is_doing', 'is_thinking', 'currently', 'temporarily', 'at_',
+        'at', 'location', 'is', 'was_at', 'went_to', 'visited',
+        'walking', 'doing', 'feeling', 'thinking', 'current'
+    ];
+    // Predicates that are persistent (permanent state changes) - create events
+    // These represent significant life changes that should be tracked
+    const PERSISTENT_PATTERNS = [
+        'lives_in', 'moved_to', 'job', 'employment', 'relationship_status',
+        'married_to', 'partner', 'education', 'career', 'identity',
+        'employer', 'works_at', 'residence', 'home', 'lives'
+    ];
     for (const existing of existingFacts) {
         // Skip if objects are null/undefined
         const existingObj = existing.object?.toLowerCase() || '';
@@ -272,9 +287,30 @@ export function detectContradictions(newFact, existingFacts) {
         if (existing.subject.toLowerCase() === newFact.subject.toLowerCase() &&
             existing.predicate === newFact.predicate &&
             existingObj !== newObj) {
+            // Determine if this is a transient or persistent predicate
+            const predicate = newFact.predicate.toLowerCase();
+            // Check exact matches first (most reliable)
+            const isExactTransient = TRANSIENT_PATTERNS.some(t => predicate === t);
+            const isExactPersistent = PERSISTENT_PATTERNS.some(p => predicate === p);
+            // Then check substring matches (exclude short patterns like 'at', 'is')
+            const isSubstringTransient = !isExactPersistent && TRANSIENT_PATTERNS.some(t => t.length > 2 && predicate.includes(t));
+            const isSubstringPersistent = PERSISTENT_PATTERNS.some(p => p.length > 2 && predicate.includes(p));
+            const isTransient = isExactTransient || isSubstringTransient;
+            const isPersistent = isExactPersistent || isSubstringPersistent;
+            // Only trigger state change for persistent predicates with high confidence
+            const isHighConfidence = (newFact.confidence || 0.5) >= 0.8;
+            const shouldCreateEvent = isPersistent && !isTransient && isHighConfidence;
+            if (shouldCreateEvent) {
+                console.log(`[Muninn] State change detected: ${newFact.subject}.${newFact.predicate} "${existingObj}" → "${newObj}"`);
+            }
             contradictions.push({
                 fact: existing,
-                type: 'value_conflict'
+                type: 'value_conflict',
+                stateChange: {
+                    oldValue: existingObj,
+                    newValue: newObj
+                },
+                isTransient: !shouldCreateEvent
             });
             continue;
         }
@@ -285,7 +321,6 @@ export function detectContradictions(newFact, existingFacts) {
             newFact.validFrom &&
             existing.validFrom !== newFact.validFrom &&
             existingObj && newObj && existingObj !== newObj) {
-            // Check if time ranges overlap and values differ
             contradictions.push({
                 fact: existing,
                 type: 'temporal_overlap'

@@ -79,6 +79,7 @@ export class Muninn {
     
     // 4. Create facts
     let factsCreated = 0;
+    let eventsCreated = 0;
     let contradictions = 0;
     
     for (const fact of extraction.facts) {
@@ -100,11 +101,27 @@ export class Muninn {
       })));
       
       if (conflicting.length > 0) {
-        // Create contradiction records
+        // Create contradiction records AND events for persistent state changes
         for (const conflict of conflicting) {
-          // Mark old fact as invalidated
-          // Store new fact
-          // Create contradiction record
+          // If this is a persistent state change (not transient), create an event
+          if ((conflict as any).stateChange && !(conflict as any).isTransient) {
+            // Only create event if there's an actual old value (not null/empty)
+            const oldVal = (conflict as any).stateChange.oldValue;
+            if (oldVal && oldVal !== 'null' && oldVal !== '') {
+              const entityId = entityIdMap.get(fact.subject.toLowerCase());
+              if (entityId) {
+                this.db.createEvent({
+                  entityId,
+                  attribute: fact.predicate,
+                  oldValue: oldVal,
+                  newValue: (conflict as any).stateChange.newValue,
+                  occurredAt: fact.validFrom ? new Date(fact.validFrom) : new Date(),
+                  sourceEpisodeId: episode.id
+                });
+                eventsCreated++;
+              }
+            }
+          }
           contradictions++;
         }
       }
@@ -131,9 +148,13 @@ export class Muninn {
       factsCreated++;
     }
     
-    // 5. Create events
-    let eventsCreated = 0;
+    // 5. Create events (from explicit extraction - only if old_value exists)
     for (const event of extraction.events) {
+      // Skip events without old_value (not a state change)
+      if (!event.oldValue || event.oldValue.toLowerCase() === 'null') {
+        continue;
+      }
+      
       const entityId = entityIdMap.get(event.entity.toLowerCase());
       if (!entityId) continue;
       
