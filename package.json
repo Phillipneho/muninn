@@ -7,10 +7,10 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
-    "migrate": "psql $DATABASE_URL -f src/schema.sql",
+    "migrate": "tsx src/migrate-neon.ts",
     "migrate:local": "psql postgresql://muninn:muninn@localhost:5432/muninn_v2 -f src/schema.sql",
-    "migrate:neon": "echo 'Set DATABASE_URL and run: psql $DATABASE_URL -f src/schema.sql'",
-    "test": "tsx src/tests/",
+    "migrate:neon": "tsx src/migrate-neon.ts",
+    "test": "tsx src/test.ts",
     "mcp": "tsx src/mcp/server.ts",
     "setup:local": "./setup.sh local",
     "setup:neon": "./setup.sh neon"
@@ -18,13 +18,16 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "better-sqlite3": "^11.0.0",
+    "dotenv": "^16.6.1",
     "openai": "^4.0.0",
+    "pg": "^8.11.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0",
-    "typescript": "^5.3.0",
-    "tsx": "^4.7.0"
+    "@types/pg": "^8.10.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
   }
 }
