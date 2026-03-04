@@ -17,17 +17,19 @@ export class Retriever {
   async recall(query: string, options?: RecallOptions): Promise<RecallResult> {
     // 1. Extract entities from query
     const entities = this.extractEntitiesSimple(query);
+    console.log('[DEBUG] Extracted entities:', entities);
     
     // 2. Parse temporal intent
     const temporalIntent = this.parseTemporalIntent(query);
+    console.log('[DEBUG] Temporal intent:', temporalIntent);
     
-    // 3. Try structured state query
+    // 3. Try structured state query (by entity, ignore predicate mismatch)
     if (entities.length > 0) {
-      const facts = this.db.getCurrentFacts(entities[0], temporalIntent.predicate);
+      const facts = this.db.getCurrentFacts(entities[0]); // Get all facts for entity
       if (facts.length > 0) {
         return {
           source: 'structured',
-          facts: facts.map(this.mapFact)
+          facts: facts.map(f => this.mapFact(f))
         };
       }
     }
