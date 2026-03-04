@@ -53,7 +53,8 @@ export class MuninnDatabase {
         valid_until TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         invalidated_at TEXT,
-        evidence TEXT
+        evidence TEXT,
+        summary_embedding BLOB
       );
       
       CREATE TABLE IF NOT EXISTS events (
@@ -282,9 +283,9 @@ export class MuninnDatabase {
       INSERT INTO facts (
         id, subject_entity_id, predicate, object_entity_id, object_value,
         value_type, confidence, source_episode_id, valid_from, valid_until,
-        created_at, evidence
+        created_at, evidence, summary_embedding
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING *
     `);
     
@@ -300,7 +301,8 @@ export class MuninnDatabase {
       fact.validFrom?.toISOString() || null,
       fact.validUntil?.toISOString() || null,
       now,
-      JSON.stringify(fact.evidence || [])
+      JSON.stringify(fact.evidence || []),
+      fact.summaryEmbedding || null
     ) as Fact;
     
     return result;

@@ -45,6 +45,9 @@ export interface Fact {
   invalidatedAt?: Date;
   
   evidence?: string[];
+  
+  // P3: Summary embedding for hybrid search
+  summaryEmbedding?: Buffer;
 }
 
 export interface Event {

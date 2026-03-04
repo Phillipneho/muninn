@@ -48,7 +48,8 @@ export class MuninnDatabase {
         valid_until TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         invalidated_at TEXT,
-        evidence TEXT
+        evidence TEXT,
+        summary_embedding BLOB
       );
       
       CREATE TABLE IF NOT EXISTS events (
@@ -234,12 +235,12 @@ export class MuninnDatabase {
       INSERT INTO facts (
         id, subject_entity_id, predicate, object_entity_id, object_value,
         value_type, confidence, source_episode_id, valid_from, valid_until,
-        created_at, evidence
+        created_at, evidence, summary_embedding
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING *
     `);
-        const result = stmt.get(id, fact.subjectEntityId, fact.predicate, fact.objectEntityId || null, fact.objectValue || null, fact.valueType || 'entity', fact.confidence || 0.8, fact.sourceEpisodeId || null, fact.validFrom?.toISOString() || null, fact.validUntil?.toISOString() || null, now, JSON.stringify(fact.evidence || []));
+        const result = stmt.get(id, fact.subjectEntityId, fact.predicate, fact.objectEntityId || null, fact.objectValue || null, fact.valueType || 'entity', fact.confidence || 0.8, fact.sourceEpisodeId || null, fact.validFrom?.toISOString() || null, fact.validUntil?.toISOString() || null, now, JSON.stringify(fact.evidence || []), fact.summaryEmbedding || null);
         return result;
     }
     getCurrentFacts(entityName, predicate) {

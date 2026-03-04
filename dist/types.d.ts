@@ -35,6 +35,7 @@ export interface Fact {
     createdAt: Date;
     invalidatedAt?: Date;
     evidence?: string[];
+    summaryEmbedding?: Buffer;
 }
 export interface Event {
     id: string;
