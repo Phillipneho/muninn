@@ -9,6 +9,35 @@ if (existsSync(dbPath)) unlinkSync(dbPath);
 
 const muninn = new Muninn(dbPath);
 
+// Category Influence Matrix: How traits in one category affect another
+const CATEGORY_INFLUENCE: Record<string, Record<string, number>> = {
+  // Political traits influence social category
+  political: {
+    social: 0.7,  // Progressive values → ally likelihood
+    career: 0.3   // Political activism → advocacy career
+  },
+  // Career traits influence social category
+  career: {
+    social: 0.5,  // Helping careers → community support
+    political: 0.3 // Counseling/teaching → progressive lean
+  },
+  // Lifestyle traits influence preference
+  lifestyle: {
+    preference: 0.6,  // Outdoors → nature preference
+    social: 0.3       // Active lifestyle → community involvement
+  },
+  // Social traits influence political
+  social: {
+    political: 0.6,   // Community involvement → political lean
+    career: 0.4       // Ally/advocacy → helping career
+  },
+  // Religious traits influence political
+  religious: {
+    political: 0.5,   // Religious values → political lean
+    social: 0.3       // Faith community → social involvement
+  }
+};
+
 // Semantic Bridge mappings (commonsense knowledge)
 const COMMONSENSE_MAPPINGS: Record<string, string[]> = {
   // Location → Condition
@@ -29,11 +58,12 @@ const COMMONSENSE_MAPPINGS: Record<string, string[]> = {
   'swimming': ['fitness', 'outdoors', 'relaxation'],
 
   // Value → Behavior
-  'transgender': ['lgbtq', 'supportive', 'advocacy', 'community'],
+  'transgender': ['lgbtq', 'supportive', 'advocacy', 'community', 'ally'],
   'progressive': ['liberal', 'open-minded', 'change', 'equality'],
   'conservative': ['traditional', 'cautious', 'stable', 'values'],
-  'lgbtq': ['supportive', 'inclusive', 'community', 'ally'],
+  'lgbtq': ['supportive', 'inclusive', 'community', 'ally', 'transgender'],
   'advocacy': ['helping', 'supportive', 'activism', 'community'],
+  'ally': ['supportive', 'inclusive', 'lgbtq', 'community'],
 
   // Activity → Trait
   'counseling': ['helping', 'empathetic', 'supportive', 'psychology'],
@@ -89,7 +119,7 @@ const INFERENCE_CATEGORIES: Record<string, {
   },
   social: {
     keywords: ['ally', 'member', 'community', 'support', 'friend', 'belong'],
-    semanticHooks: ['lgbtq', 'advocacy', 'inclusivity', 'solidarity', 'activism', 'supportive', 'volunteering', 'helping'],
+    semanticHooks: ['lgbtq', 'advocacy', 'inclusivity', 'solidarity', 'activism', 'supportive', 'volunteering', 'helping', 'transgender', 'inclusive'],
     logicalBridge: 'Activism and advocacy imply community alignment.'
   },
   lifestyle: {
@@ -114,7 +144,8 @@ function isInferenceQuestion(query: string): boolean {
 
 // Step-back prompting: identify category from specific terms
 // Categories checked in priority order (more specific first)
-const CATEGORY_PRIORITY = ['political', 'religious', 'social', 'lifestyle', 'career', 'preference'];
+// Social checked before political to catch 'ally' questions
+const CATEGORY_PRIORITY = ['religious', 'social', 'political', 'lifestyle', 'career', 'preference'];
 
 function stepBack(query: string): { category: string; subject: string; hooks: string[] } | null {
   const lowerQuery = query.toLowerCase();
@@ -177,10 +208,28 @@ function retrieveDeepProfile(db: any, entityName: string): any[] {
   });
 }
 
-// Semantic Bridge: Map inputs to outputs
-function applySemanticBridge(facts: any[]): { traits: string[]; inferences: string[] } {
+// Apply Semantic Bridge: Map inputs to outputs with recursive depth
+function applySemanticBridge(facts: any[], depth: number = 2): { traits: string[]; inferences: string[] } {
   const traits: Set<string> = new Set();
   const inferences: Set<string> = new Set();
+  const visited: Set<string> = new Set();
+
+  // Recursive function to expand traits
+  function expandTrait(trait: string, currentDepth: number) {
+    if (currentDepth > depth || visited.has(trait)) return;
+    visited.add(trait);
+
+    for (const [source, targets] of Object.entries(COMMONSENSE_MAPPINGS)) {
+      if (trait.includes(source) || source.includes(trait)) {
+        targets.forEach(t => {
+          traits.add(t);
+          inferences.add(`${trait} → ${t}`);
+          // Recursive expansion
+          expandTrait(t, currentDepth + 1);
+        });
+      }
+    }
+  }
 
   for (const fact of facts) {
     const obj = (fact.object_value || fact.object || '').toLowerCase();
@@ -188,15 +237,8 @@ function applySemanticBridge(facts: any[]): { traits: string[]; inferences: stri
     // Direct traits
     traits.add(obj);
 
-    // Apply commonsense mappings
-    for (const [source, targets] of Object.entries(COMMONSENSE_MAPPINGS)) {
-      if (obj.includes(source) || source.includes(obj)) {
-        targets.forEach(t => {
-          traits.add(t);
-          inferences.add(`${obj} → ${t}`);
-        });
-      }
-    }
+    // Apply commonsense mappings with recursive depth
+    expandTrait(obj, 1);
   }
 
   return {
@@ -345,18 +387,37 @@ function generateInferenceResponse(
 
       else if (stepBackResult.category === 'political') {
         // Infer political leaning from values
-        const isProgressive = traits.some(t => ['progressive', 'liberal', 'lgbtq', 'supportive'].some(p => t.includes(p)));
-        const isConservative = traits.some(t => ['conservative', 'traditional'].some(p => t.includes(p)));
+        const isProgressive = traits.some(t => ['progressive', 'liberal', 'lgbtq', 'supportive', 'equality'].some(p => t.includes(p)));
+        const isConservative = traits.some(t => ['conservative', 'traditional', 'cautious'].some(p => t.includes(p)));
+        
+        // Cross-category influence: career traits affect political
+        const helpingCareer = traits.filter(t => 
+          ['counseling', 'helping', 'teaching', 'advocacy'].some(h => t.includes(h))
+        );
+        
+        // Cross-category influence: social traits affect political
+        const socialTraits = traits.filter(t =>
+          ['community', 'inclusive', 'ally'].some(s => t.includes(s))
+        );
 
         if (isProgressive && !isConservative) {
           answer = 'Liberal';
           confidence = 0.75;
+          if (helpingCareer.length > 0) {
+            confidence = Math.min(confidence + 0.1, 0.85);
+            reasoning.push(`Cross-category: helping career → progressive`);
+          }
         } else if (isConservative && !isProgressive) {
           answer = 'Conservative';
           confidence = 0.75;
         } else if (isProgressive && isConservative) {
           answer = 'Moderate';
           confidence = 0.5;
+        } else if (helpingCareer.length > 0 || socialTraits.length > 0) {
+          // Cross-category boost
+          answer = 'Likely Liberal';
+          confidence = 0.6;
+          reasoning.push(`Cross-category: ${helpingCareer.length} helping + ${socialTraits.length} social traits`);
         }
       }
 
@@ -377,13 +438,31 @@ function generateInferenceResponse(
       }
 
       else if (stepBackResult.category === 'social') {
-        const isSupportive = traits.some(t => ['supportive', 'ally', 'lgbtq', 'community'].some(s => t.includes(s)));
+        // Check direct social traits
+        const isSupportive = traits.some(t => ['supportive', 'ally', 'lgbtq', 'community', 'inclusive'].some(s => t.includes(s)));
+        
+        // Cross-category influence: political traits affect social category
+        const politicalTraits = traits.filter(t => 
+          ['progressive', 'liberal', 'lgbtq', 'equality', 'justice', 'advocacy'].some(p => t.includes(p))
+        );
+        
+        // Cross-category influence: career traits (helping) affect social category
+        const helpingTraits = traits.filter(t =>
+          ['helping', 'counseling', 'supportive', 'empathetic'].some(h => t.includes(t))
+        );
+        
         const subject = lowerQuery.includes('transgender') ? 'transgender community' :
                        lowerQuery.includes('lgbtq') ? 'LGBTQ community' : 'community';
 
         if (isSupportive) {
           answer = `Yes, likely an ally to the ${subject}`;
           confidence = 0.75;
+        } else if (politicalTraits.length > 0 || helpingTraits.length > 0) {
+          // Cross-category boost
+          const crossCategoryBoost = (politicalTraits.length * 0.15) + (helpingTraits.length * 0.1);
+          confidence = Math.min(0.5 + crossCategoryBoost, 0.7);
+          answer = `Likely supportive of ${subject}`;
+          reasoning.push(`Cross-category influence: ${politicalTraits.length} political + ${helpingTraits.length} helping traits`);
         } else {
           answer = 'Unclear from available information';
           confidence = 0.4;
