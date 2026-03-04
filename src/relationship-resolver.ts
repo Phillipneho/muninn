@@ -214,7 +214,7 @@ export async function twoPassRetrieval(
   db: MuninnDatabase,
   query: string,
   executeSearch: (entityName: string, query: string) => Promise<any[]>
-): Promise<{ resolvedEntity?: ResolvedEntity; results: any[] }> {
+): Promise<{ resolvedEntity?: ResolvedEntity; rewrittenQuery?: string; results: any[] }> {
   // Check if query contains relationship
   const relationshipQuery = detectRelationshipQuery(query);
   
@@ -239,11 +239,98 @@ export async function twoPassRetrieval(
     };
   }
   
-  // Pass 2: Execute search on resolved entity
-  const results = await executeSearch(resolved.entityName, query);
+  // Pass 2: Rewrite query with resolved entity name
+  const rewrittenQuery = query.replace(
+    new RegExp(`${relationshipQuery.rootEntity}'s ${relationshipQuery.relativeDescription}`, 'i'),
+    resolved.entityName
+  );
+  
+  // Execute search on resolved entity
+  const results = await executeSearch(resolved.entityName, rewrittenQuery);
   
   return {
     resolvedEntity: resolved,
+    rewrittenQuery,
     results
   };
+}
+
+/**
+ * Infers transitive relationships from existing ones
+ * Example: If Phillip → PARTNER → Alisha and Alisha → DAUGHTER → Ella
+ *          Then infer Phillip → STEP_PARENT → Ella
+ */
+export function inferTransitiveRelationships(
+  db: MuninnDatabase,
+  entityId: string,
+  maxDepth: number = 2
+): Array<{ targetId: string; targetType: string; inferredFrom: string[] }> {
+  const inferred: Array<{ targetId: string; targetType: string; inferredFrom: string[] }> = [];
+  const visited = new Set<string>([entityId]);
+  
+  // Transitive relationship rules (case-insensitive)
+  const TRANSITIVE_RULES: Record<string, Record<string, string>> = {
+    // If A → PARTNER → B and B → PARENT → C, then A → STEP_PARENT → C
+    'is_partner_of': {
+      'is_parent_of': 'is_step_parent_of',
+      'parent_of': 'is_step_parent_of'
+    },
+    // If A → PARENT → B and B → CHILD → C, then A → GRANDPARENT → C
+    'is_parent_of': {
+      'child_of': 'is_grandparent_of',
+      'son_of': 'is_grandparent_of',
+      'daughter_of': 'is_grandparent_of'
+    },
+    'parent_of': {
+      'child_of': 'is_grandparent_of',
+      'son_of': 'is_grandparent_of',
+      'daughter_of': 'is_grandparent_of'
+    },
+    // If A → SIBLING → B and B → CHILD → C, then A → AUNT_UNCLE → C
+    'sibling_of': {
+      'child_of': 'is_aunt_uncle_of',
+      'son_of': 'is_aunt_uncle_of',
+      'daughter_of': 'is_aunt_uncle_of'
+    }
+  };
+  
+  const infer = (currentId: string, path: string[], depth: number) => {
+    if (depth > maxDepth) return;
+    
+    const relationships = db.getEntityRelationships(currentId, 'outgoing');
+    
+    for (const rel of relationships) {
+      const relType = rel.relationship_type.toLowerCase();
+      const targetId = (rel as any).target_entity_id;
+      if (visited.has(targetId)) continue;
+      
+      // Check for transitive rules
+      const rules = TRANSITIVE_RULES[relType];
+      if (rules) {
+        // Get target's relationships
+        const targetRelationships = db.getEntityRelationships(targetId, 'outgoing');
+        
+        for (const targetRel of targetRelationships) {
+          const targetRelType = targetRel.relationship_type.toLowerCase();
+          const inferredType = rules[targetRelType];
+          if (inferredType) {
+            const finalTargetId = (targetRel as any).target_entity_id;
+            if (!visited.has(finalTargetId)) {
+              inferred.push({
+                targetId: finalTargetId,
+                targetType: inferredType,
+                inferredFrom: [...path, rel.relationship_type, targetRel.relationship_type]
+              });
+            }
+          }
+        }
+      }
+      
+      visited.add(targetId);
+      infer(targetId, [...path, rel.relationship_type], depth + 1);
+    }
+  };
+  
+  infer(entityId, [], 1);
+  return inferred;
 }
