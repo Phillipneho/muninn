@@ -456,6 +456,28 @@ export class MuninnDatabase {
   // UTILITY
   // ============================================
   
+  getStats(): {
+    entityCount: number;
+    factCount: number;
+    eventCount: number;
+    relationshipCount: number;
+    contradictionCount: number;
+  } {
+    const entityCount = this.db.prepare('SELECT COUNT(*) as count FROM entities').get() as { count: number };
+    const factCount = this.db.prepare('SELECT COUNT(*) as count FROM facts').get() as { count: number };
+    const eventCount = this.db.prepare('SELECT COUNT(*) as count FROM events').get() as { count: number };
+    const relationshipCount = this.db.prepare('SELECT COUNT(*) as count FROM relationships').get() as { count: number };
+    const contradictionCount = this.db.prepare('SELECT COUNT(*) as count FROM contradictions WHERE resolution_status = ?').get('unresolved') as { count: number };
+    
+    return {
+      entityCount: entityCount.count,
+      factCount: factCount.count,
+      eventCount: eventCount.count,
+      relationshipCount: relationshipCount.count,
+      contradictionCount: contradictionCount.count
+    };
+  }
+  
   close(): void {
     this.db.close();
   }

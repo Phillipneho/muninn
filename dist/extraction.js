@@ -141,6 +141,8 @@ export class FactExtractor {
         };
     }
     normalizeEntityName(name) {
+        if (!name)
+            return '';
         return name.trim()
             .replace(/^(the|a|an)\s+/i, '') // Remove articles
             .replace(/\s+/g, ' ') // Normalize whitespace

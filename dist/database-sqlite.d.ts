@@ -16,6 +16,13 @@ export declare class MuninnDatabase {
     traverseGraph(startEntity: string, maxDepth?: number): any[];
     createContradiction(contradiction: Omit<Contradiction, 'id' | 'detectedAt'>): Contradiction | null;
     getUnresolvedContradictions(): any[];
+    getStats(): {
+        entityCount: number;
+        factCount: number;
+        eventCount: number;
+        relationshipCount: number;
+        contradictionCount: number;
+    };
     close(): void;
     transaction<T>(fn: () => T): T;
 }

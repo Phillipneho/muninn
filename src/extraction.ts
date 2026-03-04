@@ -151,6 +151,7 @@ export class FactExtractor {
   }
   
   private normalizeEntityName(name: string): string {
+    if (!name) return '';
     return name.trim()
       .replace(/^(the|a|an)\s+/i, '')  // Remove articles
       .replace(/\s+/g, ' ')            // Normalize whitespace

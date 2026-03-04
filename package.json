@@ -4,6 +4,9 @@
   "description": "Memory as evolving reality - Zep-inspired bi-temporal knowledge graph",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "muninn-mcp": "dist/mcp-server.js"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
@@ -11,7 +14,11 @@
     "migrate:local": "psql postgresql://muninn:muninn@localhost:5432/muninn_v2 -f src/schema.sql",
     "migrate:neon": "tsx src/migrate-neon.ts",
     "test": "tsx src/test.ts",
-    "mcp": "tsx src/mcp/server.ts",
+    "test:phase1": "tsx src/test-phase1.ts",
+    "test:phase2": "tsx src/test-phase2.ts",
+    "test:phase3": "tsx src/test-phase3.ts",
+    "test:phase4": "tsx src/test-phase4.ts",
+    "mcp": "tsx src/mcp-server.ts",
     "setup:local": "./setup.sh local",
     "setup:neon": "./setup.sh neon"
   },
