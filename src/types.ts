@@ -3,8 +3,8 @@
 
 export type EntityType = 'person' | 'org' | 'project' | 'concept' | 'location' | 'technology';
 export type ValueType = 'entity' | 'string' | 'number' | 'boolean' | 'date';
-export type ConflictType = 'value_conflict' | 'temporal_overlap' | 'logical';
-export type ResolutionStatus = 'unresolved' | 'resolved_by_user' | 'resolved_by_time';
+export type ConflictType = 'value_conflict' | 'temporal_overlap' | 'logical' | 'source_conflict';
+export type ResolutionStatus = 'unresolved' | 'resolved_by_user' | 'resolved_by_time' | 'resolved_by_source' | 'dismissed';
 
 // Core entities
 export interface Entity {
