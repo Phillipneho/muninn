@@ -176,16 +176,29 @@ async function runBenchmark() {
     const conv = dataset[i];
     console.log(`\n📍 Conversation ${i + 1}/${dataset.length}: ${conv.id || 'conv-' + i}`);
     
-    // Ingest conversation sessions
-    const sessions = conv.sessions || [];
-    console.log(`📚 Found ${sessions.length} sessions`);
+    // Extract sessions from conversation object
+    const convData = conv.conversation || conv;
+    const speakerA = convData.speaker_a || 'A';
+    const speakerB = convData.speaker_b || 'B';
     
-    for (const session of sessions) {
-      const sessionData = session.data || session;
-      const sessionDate = sessionData.date || sessionData.session_date || conv.date || '2024-01-01';
+    // Find all session_N keys
+    const sessionKeys = Object.keys(convData)
+      .filter(k => k.match(/^session_\d+$/))
+      .sort((a, b) => {
+        const numA = parseInt(a.replace('session_', ''));
+        const numB = parseInt(b.replace('session_', ''));
+        return numA - numB;
+      });
+    
+    console.log(`📚 Found ${sessionKeys.length} sessions`);
+    
+    for (const sessionKey of sessionKeys) {
+      const sessionNum = sessionKey.replace('session_', '');
+      const dateKey = `session_${sessionNum}_date_time`;
+      const sessionDate = convData[dateKey] || '2024-01-01';
+      const sessionData = convData[sessionKey];
       
-      const speakerA = conv.speaker_a || 'A';
-      const speakerB = conv.speaker_b || 'B';
+      if (!Array.isArray(sessionData)) continue;
       
       const content = sessionData.map((turn: any) => {
         const speaker = turn.speaker || (turn.speaker_name === 'a' ? speakerA : speakerB);
