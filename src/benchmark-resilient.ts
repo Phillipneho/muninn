@@ -5,9 +5,27 @@
 // - Recovery from partial runs
 // - Graceful error handling (continue on failure)
 
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, '..', '.env') });
+
 import { Muninn } from './index-unified.js';
-import { readFileSync, writeFileSync, appendFileSync, existsSync, unlinkSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, existsSync, unlinkSync, readdirSync, mkdirSync } from 'fs';
 import OpenAI from 'openai';
+
+// Timeout configuration
+// Session ingestion is slow (LLM extraction ~2-5s per sentence × 50 sentences)
+const INGESTION_TIMEOUT_MS = 90000;  // 90s for LLM extraction
+const ANSWER_TIMEOUT_MS = 45000;     // 45s for answer generation
+const RECALL_TIMEOUT_MS = 30000;     // 30s for recall queries
+
+// Rate limit retry
+const MAX_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 1000;
 
 const DATASET_PATH = './benchmark/locomo10.json';
 const RESULTS_DIR = '/tmp/locomo-results';
@@ -49,7 +67,6 @@ interface Checkpoint {
 // Ensure results directory exists
 function ensureResultsDir(): void {
   if (!existsSync(RESULTS_DIR)) {
-    const { mkdirSync } = require('fs');
     mkdirSync(RESULTS_DIR, { recursive: true });
   }
 }
@@ -121,7 +138,7 @@ function recoverFromJSONL(): Checkpoint | null {
   };
 }
 
-// Generate answer using OpenAI
+// Generate answer using OpenAI with rate limit retry
 async function generateAnswer(query: string, facts: any[]): Promise<string> {
   if (!facts || facts.length === 0) {
     return "I don't have information about that.";
@@ -134,21 +151,34 @@ async function generateAnswer(query: string, facts: any[]): Promise<string> {
     return `- ${subj} ${pred} ${obj}`;
   }).join('\n');
   
-  try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'Answer concisely using ONLY the provided facts. If facts do not contain the answer, say "I don\'t have information about that."' },
-        { role: 'user', content: `Facts:\n${factStr}\n\nQuestion: ${query}\n\nAnswer:` }
-      ],
-      temperature: 0,
-      max_tokens: 100
-    });
-    
-    return response.choices[0]?.message?.content?.trim() || "I don't have information about that.";
-  } catch (e) {
-    return "I don't have information about that.";
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'Answer concisely using ONLY the provided facts. If facts do not contain the answer, say "I don\'t have information about that."' },
+          { role: 'user', content: `Facts:\n${factStr}\n\nQuestion: ${query}\n\nAnswer:` }
+        ],
+        temperature: 0,
+        max_tokens: 100
+      });
+      
+      const answer = response.choices[0]?.message?.content?.trim();
+      if (!answer || answer.length < 2) {
+        return "I don't have information about that.";
+      }
+      return answer;
+    } catch (e: any) {
+      if (e.status === 429 || e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT') {
+        const delay = BASE_RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.log(`   ⏳ Rate limited, retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        return "I don't have information about that.";
+      }
+    }
   }
+  return "I don't have information about that.";
 }
 
 // Score answer with flexible matching
@@ -296,8 +326,8 @@ async function runBenchmark() {
         return `${speaker}: ${text}`;
       }).join('\n');
       
-      // Ingest with timeout
-      const result = await withTimeout(() => muninn.remember(content, { source: 'locomo', sessionDate }), 30000);
+      // Ingest with timeout (90s for LLM extraction)
+      const result = await withTimeout(() => muninn.remember(content, { source: 'locomo', sessionDate }), INGESTION_TIMEOUT_MS);
       if (!result) {
         console.log(`   ⚠️ Session ${sessionNum} timed out`);
       }
@@ -331,16 +361,23 @@ async function runBenchmark() {
       
       // Retrieve and answer with timeout
       let answer: string;
+      let factsFound = 0;
       try {
-        const result = await withTimeout(() => muninn.recall(question), 30000);
+        const result = await withTimeout(() => muninn.recall(question), RECALL_TIMEOUT_MS);
         if (!result) {
           answer = "I don't have information about that.";
           console.log(`   ⏱️ Timeout: "${question.substring(0, 30)}..."`);
         } else {
+          factsFound = result.facts?.length || 0;
           answer = await generateAnswer(question, result.facts || []);
         }
       } catch (e) {
         answer = "I don't have information about that.";
+      }
+      
+      // Debug: Log when no facts found (indicates ingestion failure)
+      if (factsFound === 0 && totalScored < 10) {
+        console.log(`   ⚠️ No facts found for: "${question.substring(0, 40)}..."`);
       }
       
       // Score
@@ -354,6 +391,12 @@ async function runBenchmark() {
         console.log(`✅ [${CATEGORY_NAMES[category] || category}] "${question.substring(0, 40)}..."`);
       } else {
         console.log(`❌ [${CATEGORY_NAMES[category] || category}] "${question.substring(0, 40)}..."`);
+      }
+      
+      // Progress every 25 questions
+      if (totalScored % 25 === 0) {
+        const pct = ((totalCorrect / totalScored) * 100).toFixed(1);
+        console.log(`   📊 Progress: ${totalCorrect}/${totalScored} (${pct}%)`);
       }
       
       // Append to JSONL immediately
