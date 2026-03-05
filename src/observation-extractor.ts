@@ -35,7 +35,36 @@ export interface ExtractionResult {
  * - Extract specific key events (speeches, birthdays, etc.)
  * - Handle age-related events
  */
-const OBSERVATION_PROMPT = `You are the Muninn Knowledge Extracter. Your job is to extract EVERY assertion from the text as tagged observations.
+const OBSERVATION_PROMPT = `You are the Muninn Knowledge Extractor. Your job is to extract EVERY assertion from the text as tagged observations.
+
+## CORE MANDATE: DO NOT SUMMARIZE. EXTRACT ATOMICALLY.
+
+Precision is prioritized over brevity. If a sentence contains specific details, extract EACH as a separate observation.
+
+### ATOMIC EXTRACTION RULES (CRITICAL)
+
+**Rule 1: Attribute Splitting**
+If a user says "I did yoga for 45 minutes in the park", extract THREE observations:
+- predicate: "activity", content: "yoga", tags: ["ACTIVITY"]
+- predicate: "duration", content: "45 minutes", tags: ["ACTIVITY"]  
+- predicate: "location", content: "the park", tags: ["ACTIVITY"]
+
+**Rule 2: Specific Details are MANDATORY**
+Do NOT generalize "yoga for 45 minutes" to just "yoga".
+Do NOT generalize "jewelry made from recycled objects" to just "jewelry".
+Do NOT generalize "Fetch and Frisbee" to just "playing".
+
+If a specific duration, location, tool, or attribute is mentioned, it MUST be extracted.
+
+**Rule 3: Frequency and Duration Extraction**
+- "once a week" → Extract: predicate: "frequency", content: "once a week"
+- "for 45 minutes" → Extract: predicate: "duration", content: "45 minutes"
+- "for four months" → Extract: predicate: "duration", content: "four months"
+
+**Rule 4: Modifier Extraction**
+- "jewelry made from recycled objects" → Extract BOTH:
+  - predicate: "makes", content: "jewelry", tags: ["TRAIT"]
+  - predicate: "material", content: "recycled objects", tags: ["TRAIT"]
 
 ## Critical: Extract for ALL Speakers
 Do not focus only on one person. Extract observations about EVERY entity mentioned.
@@ -167,6 +196,108 @@ Output:
       "valid_from": "2024-07-01",
       "confidence": 0.95,
       "evidence": "recently started learning the violin"
+    }
+  ]
+}
+
+## ATOMIC EXTRACTION EXAMPLES (v4.0 - CRITICAL)
+
+Input: "I did yoga for 45 minutes in the park."
+Output:
+{
+  "observations": [
+    {
+      "entity_name": "User",
+      "tags": ["ACTIVITY"],
+      "predicate": "activity",
+      "content": "yoga",
+      "confidence": 0.95,
+      "evidence": "I did yoga"
+    },
+    {
+      "entity_name": "User",
+      "tags": ["ACTIVITY"],
+      "predicate": "duration",
+      "content": "45 minutes",
+      "confidence": 0.95,
+      "evidence": "for 45 minutes"
+    },
+    {
+      "entity_name": "User",
+      "tags": ["ACTIVITY"],
+      "predicate": "location",
+      "content": "the park",
+      "confidence": 0.95,
+      "evidence": "in the park"
+    }
+  ]
+}
+
+Input: "Audrey makes jewelry from recycled objects."
+Output:
+{
+  "observations": [
+    {
+      "entity_name": "Audrey",
+      "tags": ["TRAIT"],
+      "predicate": "makes",
+      "content": "jewelry",
+      "confidence": 0.95,
+      "evidence": "Audrey makes jewelry"
+    },
+    {
+      "entity_name": "Audrey",
+      "tags": ["TRAIT"],
+      "predicate": "material",
+      "content": "recycled objects",
+      "confidence": 0.95,
+      "evidence": "from recycled objects"
+    }
+  ]
+}
+
+Input: "Audrey meets other dog owners once a week."
+Output:
+{
+  "observations": [
+    {
+      "entity_name": "Audrey",
+      "tags": ["ACTIVITY"],
+      "predicate": "meets",
+      "content": "other dog owners",
+      "confidence": 0.95,
+      "evidence": "Audrey meets other dog owners"
+    },
+    {
+      "entity_name": "Audrey",
+      "tags": ["ACTIVITY"],
+      "predicate": "frequency",
+      "content": "once a week",
+      "confidence": 0.95,
+      "evidence": "once a week"
+    }
+  ]
+}
+
+Input: "Audrey's dogs like to play Fetch and Frisbee."
+Output:
+{
+  "observations": [
+    {
+      "entity_name": "Audrey's dogs",
+      "tags": ["TRAIT"],
+      "predicate": "plays",
+      "content": "Fetch",
+      "confidence": 0.9,
+      "evidence": "play Fetch"
+    },
+    {
+      "entity_name": "Audrey's dogs",
+      "tags": ["TRAIT"],
+      "predicate": "plays",
+      "content": "Frisbee",
+      "confidence": 0.9,
+      "evidence": "play Frisbee"
     }
   ]
 }
