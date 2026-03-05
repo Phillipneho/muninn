@@ -225,7 +225,7 @@ async function runBenchmark() {
       }).join('\n');
       
       try {
-        await withTimeout(() => muninn.remember(content, { source: 'locomo', sessionDate }), 10000);
+        await withTimeout(() => muninn.remember(content, { source: 'locomo', sessionDate }), 60000);
       } catch (e: any) {
         console.log(`   ⚠️ Session ${sessionNum} timeout/error: ${e.message}`);
       }
