@@ -7,6 +7,7 @@ export * from './types.js';
 
 import { ObservationDatabase, CreateObservationInput } from './observation-database.js';
 import { ObservationExtractor, ExtractionResult } from './observation-extractor.js';
+import { resolveConflicts, getCurrentTruth, getHistoricalTruths, getPredicateHistory } from './engine/truth-resolver.js';
 import type { RecallOptions, RecallResult } from './types.js';
 
 /**
@@ -168,7 +169,7 @@ export class Muninn {
       const finalEntityId = entityIdMap.get(obs.entity_name.toLowerCase())!;
       
       // Create observation with all tags
-      this.db.createObservation({
+      const observation = this.db.createObservation({
         entity_id: finalEntityId,
         tags: obs.tags,
         predicate: obs.predicate,
@@ -180,6 +181,10 @@ export class Muninn {
         source_episode_id: episode.id,
         evidence: obs.evidence
       });
+      
+      // Run conflict resolution (dethroning script)
+      // This detects when a STATE changes (e.g., Tim stops piano, starts violin)
+      await resolveConflicts(observation, this.db);
       
       observationsCreated++;
     }
@@ -389,5 +394,55 @@ export class Muninn {
    */
   getDatabase(): ObservationDatabase {
     return this.db;
+  }
+  
+  /**
+   * Get the current truth for a predicate (dethroning-aware)
+   */
+  getCurrentTruth(entityName: string, predicate: string): { value: string; validFrom?: string } | null {
+    const resolved = this.db.resolveEntity(entityName);
+    if (!resolved) return null;
+    
+    const current = getCurrentTruth(resolved.id, predicate, this.db);
+    if (!current) return null;
+    
+    return {
+      value: current.object_value || '',
+      validFrom: current.valid_from
+    };
+  }
+  
+  /**
+   * Get historical truths for a predicate
+   */
+  getHistoricalTruths(entityName: string, predicate: string): Array<{ value: string; validFrom?: string; validUntil?: string }> {
+    const resolved = this.db.resolveEntity(entityName);
+    if (!resolved) return [];
+    
+    return getHistoricalTruths(resolved.id, predicate, this.db).map(obs => ({
+      value: obs.object_value || '',
+      validFrom: obs.valid_from,
+      validUntil: obs.valid_until
+    }));
+  }
+  
+  /**
+   * Get full history of a predicate (current + historical)
+   */
+  getPredicateHistory(entityName: string, predicate: string): Array<{
+    value: string;
+    status: 'current' | 'historical';
+    validFrom?: string;
+    validUntil?: string;
+  }> {
+    const resolved = this.db.resolveEntity(entityName);
+    if (!resolved) return [];
+    
+    return getPredicateHistory(resolved.id, predicate, this.db).map(item => ({
+      value: item.observation.object_value || '',
+      status: item.status,
+      validFrom: item.observation.valid_from,
+      validUntil: item.observation.valid_until
+    }));
   }
 }

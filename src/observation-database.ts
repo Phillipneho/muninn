@@ -219,6 +219,57 @@ export class ObservationDatabase {
     return this.rowToObservation(row);
   }
   
+  updateObservation(id: string, updates: {
+    valid_until?: string;
+    addTags?: string[];
+    removeTags?: string[];
+  }): Observation | undefined {
+    // First get the current observation
+    const current = this.getObservation(id);
+    if (!current) return undefined;
+    
+    // Handle tag updates
+    let newTags = [...current.tags];
+    if (updates.addTags) {
+      for (const tag of updates.addTags) {
+        if (!newTags.includes(tag)) {
+          newTags.push(tag);
+        }
+      }
+    }
+    if (updates.removeTags) {
+      newTags = newTags.filter(t => !updates.removeTags!.includes(t));
+    }
+    
+    // Build update query
+    const setClauses: string[] = [];
+    const params: any[] = [];
+    
+    if (updates.valid_until !== undefined) {
+      setClauses.push('valid_until = ?');
+      params.push(updates.valid_until);
+    }
+    
+    if (JSON.stringify(newTags) !== JSON.stringify(current.tags)) {
+      setClauses.push('tags = ?');
+      params.push(JSON.stringify(newTags));
+    }
+    
+    if (setClauses.length === 0) {
+      return current; // Nothing to update
+    }
+    
+    params.push(id);
+    
+    this.db.prepare(`
+      UPDATE observations
+      SET ${setClauses.join(', ')}
+      WHERE id = ?
+    `).run(...params);
+    
+    return this.getObservation(id);
+  }
+  
   getObservationsByEntity(entityId: string, options?: {
     tags?: string[];
     predicate?: string;

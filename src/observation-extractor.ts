@@ -49,6 +49,27 @@ Do not focus only on one person. Extract observations about EVERY entity mention
 | ACTIVITY | One-off events with timestamps | "attended support group May 7", "ran charity race" | Temporal |
 | STATE | Current values that can change | "works at TechCorp", "lives in Brisbane", "is single" | Updateable |
 
+## CRITICAL: Exclusive Predicates (State Changes)
+
+These predicates are MUTUALLY EXCLUSIVE. Only ONE can be current at a time:
+
+| Extract as... | When text mentions... |
+|----------------|----------------------|
+| learning_instrument | "learning piano", "playing violin", "studying guitar", "practicing drums" |
+| lives_in | "lives in", "resides in", "moved to", "living in", "based in" |
+| current_employer | "works at", "employed by", "job at", "working for" |
+| marital_status | "married", "divorced", "single", "widowed" |
+| relationship_status | "in a relationship", "dating", "engaged", "separated" |
+| current_city | "living in [city]", "based in [city]", "moved to [city]" |
+| current_role | "role is", "position is", "title is", "works as" |
+| favorite_[X] | "favorite [thing]", "loves [thing]", "best [thing]" |
+
+**When extracting these:**
+- Use EXACTLY the predicate shown above (e.g., 'learning_instrument', NOT 'plays' or 'has_been_playing')
+- Mark with STATE tag (these are changeable states)
+- Set valid_from when the change happened (if mentioned)
+- If previous value is mentioned, set previous_value field
+
 ## Tagging Rules
 
 1. **Multi-tag**: An observation can have multiple tags
@@ -112,6 +133,40 @@ Output:
       "valid_from": "2022-01-01",
       "confidence": 0.95,
       "evidence": "I painted that lake sunrise last year!"
+    }
+  ]
+}
+
+Input: "Tim has been playing the piano for about four months."
+Session Date: "2024-06-01"
+Output:
+{
+  "observations": [
+    {
+      "entity_name": "Tim",
+      "tags": ["STATE"],
+      "predicate": "learning_instrument",
+      "content": "piano",
+      "valid_from": "2024-02-01",
+      "confidence": 0.95,
+      "evidence": "has been playing the piano for about four months"
+    }
+  ]
+}
+
+Input: "Tim recently started learning the violin."
+Session Date: "2024-07-01"
+Output:
+{
+  "observations": [
+    {
+      "entity_name": "Tim",
+      "tags": ["STATE", "CURRENT"],
+      "predicate": "learning_instrument",
+      "content": "violin",
+      "valid_from": "2024-07-01",
+      "confidence": 0.95,
+      "evidence": "recently started learning the violin"
     }
   ]
 }
@@ -214,6 +269,40 @@ Output:
       "valid_from": null,
       "confidence": 0.9,
       "evidence": "I've known my current group of friends for 4 years"
+    }
+  ]
+}
+
+Input: "John moved to New York in 2023."
+Session Date: "2023-01-01"
+Output:
+{
+  "observations": [
+    {
+      "entity_name": "John",
+      "tags": ["STATE", "CURRENT"],
+      "predicate": "lives_in",
+      "content": "New York",
+      "valid_from": "2023-01-01",
+      "confidence": 0.95,
+      "evidence": "John moved to New York in 2023"
+    }
+  ]
+}
+
+Input: "John relocated to Brisbane in January 2025."
+Session Date: "2025-01-15"
+Output:
+{
+  "observations": [
+    {
+      "entity_name": "John",
+      "tags": ["STATE", "CURRENT"],
+      "predicate": "lives_in",
+      "content": "Brisbane",
+      "valid_from": "2025-01-15",
+      "confidence": 0.95,
+      "evidence": "John relocated to Brisbane in January 2025"
     }
   ]
 }
