@@ -253,3 +253,103 @@ $$ LANGUAGE plpgsql;
 -- 2. Add precedent search to recall-enhanced.ts
 -- 3. Schedule "sleep cycle" cron for consolidation
 -- ============================================
+
+-- ============================================
+-- 7. SLEEP CYCLE SUPPORT
+-- Consolidation tracking + importance scoring
+-- ============================================
+
+-- Add consolidation columns to observations
+ALTER TABLE observations 
+  ADD COLUMN IF NOT EXISTS observation_type TEXT DEFAULT 'HIPPOCAMPAL',  -- 'HIPPOCAMPAL' or 'CORTEX'
+  ADD COLUMN IF NOT EXISTS is_consolidated BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS importance REAL DEFAULT 0.5,
+  ADD COLUMN IF NOT EXISTS source_prototype_id UUID REFERENCES cortex_prototypes(id);
+
+CREATE INDEX IF NOT EXISTS idx_obs_consolidation ON observations(entity_id, is_consolidated)
+  WHERE is_consolidated = FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_obs_type ON observations(observation_type);
+
+-- ============================================
+-- 8. DECISION TRACE FEEDBACK LOOP
+-- ============================================
+
+-- Record successful retrieval for reward weighting
+CREATE OR REPLACE FUNCTION record_trace_reward(
+  p_trace_id UUID,
+  p_reward REAL DEFAULT 0.5
+) RETURNS VOID AS $$
+BEGIN
+  UPDATE decision_traces
+  SET outcome_reward = p_reward,
+      ground_truth_match = (p_reward > 0.7)
+  WHERE trace_id = p_trace_id;
+  
+  -- Boost importance of observations that contributed
+  UPDATE observations o
+  SET importance = LEAST(1.0, importance + (p_reward * 0.1))
+  WHERE o.id = ANY(
+    SELECT jsonb_array_elements_text(activated_nodes->'observation_ids')::uuid
+    FROM decision_traces
+    WHERE trace_id = p_trace_id
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================
+-- 9. SLEEP CYCLE CONSOLIDATION JOB
+-- ============================================
+
+CREATE OR REPLACE FUNCTION run_sleep_cycle(
+  p_batch_size INT DEFAULT 100
+) RETURNS TABLE (
+  entity_id UUID,
+  cluster_id TEXT,
+  observations_consolidated INT,
+  prototypes_created INT
+) AS $$
+DECLARE
+  v_entity RECORD;
+  v_cluster RECORD;
+  v_prototype_id UUID;
+  v_obs_count INT;
+BEGIN
+  -- For each entity with unconsolidated observations
+  FOR v_entity IN 
+    SELECT DISTINCT entity_id 
+    FROM observations 
+    WHERE is_consolidated = FALSE
+    LIMIT p_batch_size
+  LOOP
+    -- For each cluster within entity
+    FOR v_cluster IN
+      SELECT DISTINCT predicate as cluster_id
+      FROM observations
+      WHERE entity_id = v_entity.entity_id
+      AND is_consolidated = FALSE
+    LOOP
+      -- Get observations for this cluster
+      SELECT count(*) INTO v_obs_count
+      FROM observations
+      WHERE entity_id = v_entity.entity_id
+      AND predicate = v_cluster.cluster_id
+      AND is_consolidated = FALSE;
+      
+      -- If enough observations, consolidate
+      IF v_obs_count >= 10 THEN
+        -- Call consolidation (TypeScript layer handles LLM)
+        -- This is a placeholder - actual LLM call happens in application
+        v_prototype_id := consolidate_cluster(
+          v_cluster.cluster_id,
+          v_entity.entity_id,
+          10
+        );
+        
+        RETURN QUERY SELECT v_entity.entity_id, v_cluster.cluster_id, v_obs_count, 
+          CASE WHEN v_prototype_id IS NOT NULL THEN 1 ELSE 0 END;
+      END IF;
+    END LOOP;
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql;
