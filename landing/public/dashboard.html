@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — Muninn</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --obsidian: #050505;
+            --obsidian-light: #0a0a0a;
+            --obsidian-card: rgba(13, 13, 13, 0.85);
+            --emerald: #10B981;
+            --emerald-glow: rgba(16, 185, 129, 0.3);
+            --emerald-subtle: rgba(16, 185, 129, 0.1);
+            --white: #ffffff;
+            --gray-100: #f4f4f5;
+            --gray-200: #e4e4e7;
+            --gray-400: #a1a1aa;
+            --gray-600: #52525b;
+            --gray-800: #27272a;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--obsidian);
+            color: var(--gray-200);
+            line-height: 1.6;
+            min-height: 100vh;
+            position: relative;
+        }
+        
+        /* Raven background - centerline on left edge, wingtip on right edge */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 50%;
+            left: 0;
+            width: 200vw;
+            height: 200vh;
+            transform: translateY(-50%);
+            background-image: url('/hero.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: left center;
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+        
+        nav {
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(16, 185, 129, 0.1);
+            background: rgba(5, 5, 5, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        nav .container { display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 20px; font-weight: 600; color: #fff; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .logo span { color: var(--emerald); }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
+        .nav-links a { color: var(--gray-400); text-decoration: none; font-size: 14px; }
+        .nav-links a:hover { color: var(--emerald); }
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        .btn-primary { background: var(--emerald); color: var(--obsidian); }
+        .btn-primary:hover { box-shadow: 0 0 20px var(--emerald-glow); }
+        .btn-secondary { background: rgba(39, 39, 42, 0.8); border: 1px solid var(--gray-800); color: var(--gray-200); backdrop-filter: blur(10px); }
+        .btn-secondary:hover { border-color: var(--emerald); }
+        
+        .main { padding: 40px 0; }
+        
+        .main { padding: 40px 0; }
+        
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 32px;
+            border-bottom: 1px solid var(--gray-800);
+            flex-wrap: wrap;
+        }
+        .tab {
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            color: var(--gray-400);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: color 0.2s;
+        }
+        .tab.active { color: var(--emerald); border-bottom-color: var(--emerald); }
+        .tab:hover { color: var(--emerald); }
+        
+        .stat-card {
+            background: rgba(13, 13, 13, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(16, 185, 129, 0.1);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            position: relative;
+        }
+        .stat-card:hover { border-color: rgba(16, 185, 129, 0.2); }
+        .stat-value { font-size: 36px; font-weight: 700; margin-bottom: 8px; }
+        .stat-label { color: var(--gray-400); font-size: 13px; }
+        .stat-tooltip { 
+            position: absolute; 
+            top: 8px; 
+            right: 8px; 
+            width: 16px; 
+            height: 16px; 
+            border-radius: 50%; 
+            background: var(--gray-800);
+            color: var(--gray-400);
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: help;
+        }
+        
+        .memory-item {
+            background: rgba(5, 5, 5, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--gray-800);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .memory-item:hover { border-color: var(--emerald); }
+        .memory-content { color: var(--gray-200); margin-bottom: 8px; line-height: 1.6; }
+        .memory-meta { display: flex; gap: 16px; color: var(--gray-600); font-size: 12px; }
+        .memory-actions { display: flex; gap: 8px; margin-top: 12px; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--gray-400);
+        }
+        .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        .empty-state-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--gray-200); }
+        .empty-state-text { font-size: 14px; margin-bottom: 16px; }
+        
+        .chart-container {
+            height: 200px;
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            padding: 16px;
+            background: rgba(5, 5, 5, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 8px;
+        }
+        .chart-bar {
+            flex: 1;
+            background: var(--emerald);
+            border-radius: 2px 2px 0 0;
+            min-height: 4px;
+            transition: height 0.3s;
+        }
+        
+        .entity-list { }
+        .entity-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--gray-800);
+        }
+        .entity-item:last-child { border-bottom: none; }
+        .entity-name { color: var(--gray-200); }
+        .entity-count { 
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--emerald);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .distribution-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            height: 120px;
+        }
+        .distribution-bar-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .distribution-bar {
+            width: 100%;
+            background: var(--emerald);
+            border-radius: 4px 4px 0 0;
+            transition: height 0.3s;
+        }
+        .distribution-label { font-size: 11px; color: var(--gray-600); margin-top: 8px; }
+        
+        .card {
+            background: var(--obsidian-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(16, 185, 129, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .card:hover { border-color: rgba(16, 185, 129, 0.2); }
+        .card h2 { font-size: 18px; margin-bottom: 16px; color: var(--white); }
+        .card p { color: var(--gray-400); font-size: 14px; }
+        
+        .api-key-box {
+            background: var(--obsidian);
+            border: 1px solid var(--gray-800);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: monospace;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .api-key-box code { flex: 1; word-break: break-all; color: var(--emerald); }
+        .copy-btn {
+            background: var(--gray-800);
+            border: none;
+            color: var(--gray-400);
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .copy-btn:hover { color: var(--emerald); border-color: var(--emerald); }
+        .copy-btn:hover { background: var(--gray-800); color: var(--emerald); }
+        
+        .key-list { list-style: none; }
+        .key-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border-bottom: 1px solid var(--gray-800);
+        }
+        .key-list li:last-child { border-bottom: none; }
+        .key-name { font-weight: 500; color: var(--white); }
+        .key-meta { color: var(--gray-400); font-size: 13px; }
+        
+        .usage-bar {
+            height: 8px;
+            background: var(--gray-800);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .usage-fill { height: 100%; background: var(--emerald); }
+        
+        .provider-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .provider-card {
+            background: var(--obsidian);
+            border: 1px solid var(--gray-800);
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .provider-card:hover { border-color: var(--emerald); }
+        .provider-card.active { border-color: var(--emerald); background: rgba(16, 185, 129, 0.1); }
+        .provider-icon { font-size: 24px; margin-bottom: 8px; }
+        .provider-name { font-weight: 500; margin-bottom: 4px; color: var(--white); }
+        .provider-model { color: var(--gray-400); font-size: 12px; }
+        
+        .input-group { margin-bottom: 16px; }
+        .input-group label { display: block; font-size: 14px; margin-bottom: 8px; color: var(--gray-200); }
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            background: var(--obsidian);
+            border: 1px solid var(--gray-800);
+            border-radius: 6px;
+            color: var(--gray-200);
+            font-size: 14px;
+        }
+        .input-group input:focus { outline: none; border-color: var(--emerald); }
+        
+        .code-block {
+            background: var(--obsidian);
+            border: 1px solid var(--gray-800);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+        .code-block code {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            font-size: 13px;
+            color: var(--gray-400);
+            white-space: pre;
+        }
+        .code-block .comment { color: var(--gray-600); }
+        .code-block .string { color: var(--emerald); }
+        .code-block .keyword { color: var(--emerald); }
+        
+        .hidden { display: none; }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        .alert-success { background: rgba(16, 185, 129, 0.1); border: 1px solid var(--emerald); color: var(--emerald); }
+        .alert-error { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #ef4444; }
+        
+        @media (max-width: 768px) {
+            .provider-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="container">
+            <a href="/" class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="#10B981"/>
+                </svg>
+                <span>Muninn</span>
+            </a>
+            <div class="nav-links">
+                <a href="/#features">Features</a>
+                <a href="/#benchmark">Benchmark</a>
+                <a href="/#pricing">Pricing</a>
+                <a href="https://clawhub.com/skills/muninn-memory">Docs</a>
+                <button class="btn btn-secondary" id="logoutBtn">Log out</button>
+            </div>
+        </div>
+    </nav>
+    
+    <main class="main">
+        <div class="container">
+            <!-- Not logged in state -->
+            <div id="authSection">
+                <div class="card" id="loginCard">
+                    <h2>Log in to Muninn</h2>
+                    <p>Access your API keys and usage stats.</p>
+                    
+                    <div id="loginError" class="alert alert-error hidden"></div>
+                    
+                    <form id="loginForm">
+                        <div class="input-group">
+                            <label for="loginEmail">Email</label>
+                            <input type="email" id="loginEmail" placeholder="you@example.com" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="loginPassword">Password</label>
+                            <input type="password" id="loginPassword" placeholder="••••••••" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Log in</button>
+                    </form>
+                    
+                    <p style="margin-top: 16px; color: #71717a; font-size: 14px;">
+                        Don't have an account? 
+                        <a href="#" id="showSignup" style="color: #8b5cf6;">Sign up</a>
+                    </p>
+                    <p style="margin-top: 8px; color: #71717a; font-size: 12px;">
+                        <a href="#" id="showReset" style="color: #8b5cf6;">Forgot password?</a>
+                    </p>
+                </div>
+                
+                <div class="card hidden" id="resetCard">
+                    <h2>Reset Password</h2>
+                    <p>Enter your email to receive a password reset link.</p>
+                    
+                    <div id="resetError" class="alert alert-error hidden"></div>
+                    <div id="resetSuccess" class="alert alert-success hidden"></div>
+                    
+                    <form id="resetForm">
+                        <div class="input-group">
+                            <label for="resetEmail">Email</label>
+                            <input type="email" id="resetEmail" placeholder="you@example.com" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Send Reset Link</button>
+                    </form>
+                    
+                    <p style="margin-top: 16px; color: #71717a; font-size: 14px;">
+                        Remember your password? 
+                        <a href="#" id="showLoginFromReset" style="color: #8b5cf6;">Log in</a>
+                    </p>
+                </div>
+                
+                <div class="card hidden" id="signupCard">
+                    <h2>Create your account</h2>
+                    <p>Start your 14-day free trial. No credit card required.</p>
+                    
+                    <div id="signupError" class="alert alert-error hidden"></div>
+                    
+                    <form id="signupForm">
+                        <div class="input-group">
+                            <label for="signupEmail">Email</label>
+                            <input type="email" id="signupEmail" placeholder="you@example.com" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="signupPassword">Password</label>
+                            <input type="password" id="signupPassword" placeholder="••••••••" minlength="8" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="orgName">Organization Name (optional)</label>
+                            <input type="text" id="orgName" placeholder="My Organization">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Create account</button>
+                    </form>
+                    
+                    <p style="margin-top: 16px; color: #71717a; font-size: 14px;">
+                        Already have an account? 
+                        <a href="#" id="showLogin" style="color: #8b5cf6;">Log in</a>
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Logged in state -->
+            <div id="dashboardSection" class="hidden">
+                <div class="tabs">
+                    <button class="tab active" data-tab="keys">API Keys</button>
+                    <button class="tab" data-tab="provider">LLM Provider</button>
+                    <button class="tab" data-tab="studio">Studio</button>
+                    <button class="tab" data-tab="analytics">Analytics</button>
+                    <button class="tab" data-tab="usage">Usage</button>
+                    <button class="tab" data-tab="export">Export</button>
+                    <button class="tab" data-tab="docs">Integration</button>
+                </div>
+                
+                <!-- API Keys Tab -->
+                <div id="keysTab">
+                    <div class="card">
+                        <h2>Your API Key</h2>
+                        <p>Use this key to authenticate your API requests. Keep it secret.</p>
+                        
+                        <div class="api-key-box" style="margin-top: 16px;">
+                            <code id="apiKeyDisplay">Loading...</code>
+                            <button class="copy-btn" onclick="copyApiKey()">Copy</button>
+                        </div>
+                        
+                        <div style="margin-top: 24px;">
+                            <button class="btn btn-secondary" onclick="createNewKey()">Generate New Key</button>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>All Keys</h2>
+                        <ul class="key-list" id="keyList">
+                            <li>Loading...</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Provider Tab -->
+                <div id="providerTab" class="hidden">
+                    <div class="card">
+                        <h2>Bring Your Own Key (BYOK)</h2>
+                        <p>Use your own OpenAI, Gemini, Anthropic, or Ollama API key for embeddings. Your key, your costs.</p>
+                        
+                        <div class="provider-grid" style="margin-top: 24px;">
+                            <div class="provider-card" data-provider="openai" onclick="selectProvider('openai')">
+                                <div class="provider-icon">🤖</div>
+                                <div class="provider-name">OpenAI</div>
+                                <div class="provider-model">text-embedding-3-small</div>
+                            </div>
+                            <div class="provider-card" data-provider="gemini" onclick="selectProvider('gemini')">
+                                <div class="provider-icon">✨</div>
+                                <div class="provider-name">Gemini</div>
+                                <div class="provider-model">gemini-embedding-exp-03-07</div>
+                            </div>
+                            <div class="provider-card" data-provider="anthropic" onclick="selectProvider('anthropic')">
+                                <div class="provider-icon">🧠</div>
+                                <div class="provider-name">Anthropic</div>
+                                <div class="provider-model">via OpenRouter</div>
+                            </div>
+                            <div class="provider-card" data-provider="ollama" onclick="selectProvider('ollama')">
+                                <div class="provider-icon">🦙</div>
+                                <div class="provider-name">Ollama</div>
+                                <div class="provider-model">nomic-embed-text (local)</div>
+                            </div>
+                            <div class="provider-card" data-provider="openrouter" onclick="selectProvider('openrouter')">
+                                <div class="provider-icon">🔀</div>
+                                <div class="provider-name">OpenRouter</div>
+                                <div class="provider-model">Any embedding model</div>
+                            </div>
+                        </div>
+                        
+                        <form id="providerForm" class="hidden" style="margin-top: 24px;">
+                            <div class="input-group">
+                                <label for="providerApiKey">API Key</label>
+                                <input type="password" id="providerApiKey" placeholder="sk-...">
+                            </div>
+                            <div class="input-group hidden" id="baseUrlGroup">
+                                <label for="providerBaseUrl">Base URL</label>
+                                <input type="text" id="providerBaseUrl" placeholder="http://localhost:11434">
+                            </div>
+                            <div class="input-group">
+                                <label for="providerModel">Model (optional)</label>
+                                <input type="text" id="providerModel" placeholder="Default model will be used">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save Provider</button>
+                        </form>
+                        
+                        <div id="currentProvider" style="margin-top: 24px;">
+                            <p style="color: #71717a; font-size: 14px;">Current provider: <span id="currentProviderName">System default (Gemini)</span></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Studio Tab -->
+                <div id="studioTab" class="hidden">
+                    <div class="card">
+                        <h2>🔍 Memory Explorer</h2>
+                        <p>Browse, search, and manage your stored memories.</p>
+                        
+                        <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
+                            <input type="text" id="memorySearch" placeholder="Search memories..." style="flex: 1; min-width: 200px; padding: 12px 16px; background: var(--obsidian); border: 1px solid var(--gray-800); border-radius: 8px; color: var(--gray-200);">
+                            <select id="entityFilter" style="padding: 12px 16px; background: var(--obsidian); border: 1px solid var(--gray-800); border-radius: 8px; color: var(--gray-200); min-width: 150px;">
+                                <option value="">All Entities</option>
+                            </select>
+                            <input type="date" id="dateFrom" style="padding: 12px 16px; background: var(--obsidian); border: 1px solid var(--gray-800); border-radius: 8px; color: var(--gray-200);">
+                            <input type="date" id="dateTo" style="padding: 12px 16px; background: var(--obsidian); border: 1px solid var(--gray-800); border-radius: 8px; color: var(--gray-200);">
+                            <button class="btn btn-primary" onclick="filterMemories()">Search</button>
+                        </div>
+                        
+                        <div id="memoriesList" style="margin-top: 24px;">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">🧠</div>
+                                <div class="empty-state-title">No memories yet</div>
+                                <div class="empty-state-text">Start storing memories via the API to see them here.</div>
+                                <code style="font-size: 12px; background: var(--obsidian); padding: 8px 12px; border-radius: 4px;">POST /api/memories</code>
+                            </div>
+                        </div>
+                        
+                        <div id="memoriesPagination" style="margin-top: 16px; display: flex; justify-content: center; gap: 8px;">
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>⚠️ Contradiction Review</h2>
+                        <p>Memories that may conflict with each other.</p>
+                        
+                        <div id="contradictionsList" style="margin-top: 24px;">
+                            <div class="empty-state" style="padding: 24px;">
+                                <div style="font-size: 32px; margin-bottom: 12px;">✓</div>
+                                <div class="empty-state-title">All Clear</div>
+                                <div class="empty-state-text">No contradictions detected in your memories.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Analytics Tab -->
+                <div id="analyticsTab" class="hidden">
+                    <div class="card">
+                        <h2>📊 Analytics Dashboard</h2>
+                        <p>Insights into your memory usage and patterns.</p>
+                        
+                        <div style="margin-top: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+                            <div class="stat-card">
+                                <div class="stat-tooltip" title="Total memories stored in your vault">?</div>
+                                <div class="stat-value" style="color: var(--emerald);" id="totalMemories">-</div>
+                                <div class="stat-label">Total Memories</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-tooltip" title="How many times memories were retrieved via API">?</div>
+                                <div class="stat-value" style="color: #22c55e;" id="totalRetrievals">-</div>
+                                <div class="stat-label">Total Retrievals</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-tooltip" title="Average importance score (0-1). Higher = more frequently accessed.">?</div>
+                                <div class="stat-value" style="color: #f59e0b;" id="avgSalience">-</div>
+                                <div class="stat-label">Avg Importance</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-tooltip" title="Memory growth over the last 7 days">?</div>
+                                <div class="stat-value" style="color: #3b82f6;" id="growthRate">-</div>
+                                <div class="stat-label">7-Day Growth</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>📈 Memory Growth</h2>
+                        <p>Memories added over the past 30 days.</p>
+                        <div id="growthChart" class="chart-container">
+                            <p style="color: var(--gray-400); text-align: center; width: 100%;">Loading...</p>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div class="card">
+                            <h2>🏷️ Top Entities</h2>
+                            <p>Entities with the most associated memories.</p>
+                            <div id="topEntities" style="margin-top: 16px;">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">🏷️</div>
+                                    <div class="empty-state-title">No entities yet</div>
+                                    <div class="empty-state-text">Entities are automatically extracted from your memories.</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h2>📊 Importance Distribution</h2>
+                            <p>How memories are distributed by importance score.</p>
+                            <div id="salienceDistribution" style="margin-top: 16px;">
+                                <div class="distribution-bars">
+                                    <div class="distribution-bar-wrapper">
+                                        <div class="distribution-bar" style="height: 20%;"></div>
+                                        <div class="distribution-label">0.0-0.2</div>
+                                    </div>
+                                    <div class="distribution-bar-wrapper">
+                                        <div class="distribution-bar" style="height: 40%;"></div>
+                                        <div class="distribution-label">0.2-0.4</div>
+                                    </div>
+                                    <div class="distribution-bar-wrapper">
+                                        <div class="distribution-bar" style="height: 60%;"></div>
+                                        <div class="distribution-label">0.4-0.6</div>
+                                    </div>
+                                    <div class="distribution-bar-wrapper">
+                                        <div class="distribution-bar" style="height: 80%;"></div>
+                                        <div class="distribution-label">0.6-0.8</div>
+                                    </div>
+                                    <div class="distribution-bar-wrapper">
+                                        <div class="distribution-bar" style="height: 30%;"></div>
+                                        <div class="distribution-label">0.8-1.0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Usage Tab -->
+                <div id="usageTab" class="hidden">
+                    <div class="card">
+                        <h2>📈 API Usage</h2>
+                        <p>Your API calls this billing period.</p>
+                        
+                        <div style="margin-top: 24px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                                <span id="usageText" style="color: var(--gray-200);">0 / 50,000 calls</span>
+                                <span id="usagePercent" style="color: var(--emerald);">0%</span>
+                            </div>
+                            <div class="usage-bar" style="height: 12px; background: var(--gray-800); border-radius: 6px; overflow: hidden;">
+                                <div class="usage-fill" id="usageFill" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--emerald), #34D399); border-radius: 6px; transition: width 0.5s;"></div>
+                            </div>
+                            <p style="color: var(--gray-400); font-size: 13px; margin-top: 8px;">
+                                Usage resets on the 1st of each month. Founder accounts have unlimited usage.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>💳 Subscription</h2>
+                        <p>Manage your plan and billing.</p>
+                        
+                        <div style="margin-top: 24px; display: flex; gap: 16px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 200px; padding: 20px; background: var(--obsidian); border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2);">
+                                <div style="color: var(--emerald); font-size: 14px; font-weight: 600; margin-bottom: 8px;">CURRENT PLAN</div>
+                                <div style="font-size: 24px; font-weight: 700; color: var(--white);" id="currentPlan">Pro</div>
+                                <div style="color: var(--gray-400); font-size: 13px; margin-top: 4px;">$10/month</div>
+                            </div>
+                            <div style="flex: 1; min-width: 200px; padding: 20px; background: var(--obsidian); border-radius: 12px; border: 1px solid var(--gray-800);">
+                                <div style="color: var(--gray-400); font-size: 14px; font-weight: 600; margin-bottom: 8px;">BILLING CYCLE</div>
+                                <div style="font-size: 24px; font-weight: 700; color: var(--white);" id="billingCycle">Monthly</div>
+                                <div style="color: var(--gray-400); font-size: 13px; margin-top: 4px;">Resets on the 1st</div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 24px;">
+                            <button class="btn btn-secondary" onclick="window.location.href='https://billing.stripe.com/p/login/test_00g16a8cN2KodS0144'">Manage Subscription</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Export Tab -->
+                <div id="exportTab" class="hidden">
+                    <div class="card">
+                        <h2>Export Memories</h2>
+                        <p>Download all your memories and entities as a portable JSON file.</p>
+                        
+                        <div style="margin-top: 24px;">
+                            <button class="btn btn-primary" onclick="exportMemories()">
+                                <span id="exportBtn">Download Export</span>
+                            </button>
+                        </div>
+                        
+                        <div style="margin-top: 16px; padding: 16px; background: #0a0a0f; border-radius: 8px;">
+                            <h3 style="font-size: 14px; margin-bottom: 8px;">What's included</h3>
+                            <ul style="color: #71717a; font-size: 13px; margin-left: 20px;">
+                                <li>All memories with metadata</li>
+                                <li>All entities (people, organizations, concepts)</li>
+                                <li>Salience scores and access counts</li>
+                                <li>Date range and export checksum</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>Import Memories</h2>
+                        <p>Import memories from a previously exported file.</p>
+                        
+                        <div style="margin-top: 24px;">
+                            <input type="file" id="importFile" accept=".json,.muninn" style="display: none;" onchange="handleImport(event)">
+                            <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">Choose File</button>
+                            <span id="importStatus" style="margin-left: 12px; color: #71717a; font-size: 14px;"></span>
+                        </div>
+                        
+                        <div style="margin-top: 16px; padding: 16px; background: #14532d; border-radius: 8px; border: 1px solid #22c55e;">
+                            <p style="font-size: 13px; color: #22c55e;">
+                                <strong>Note:</strong> Import will merge with existing memories. Duplicates will be skipped.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>Capsule Format</h2>
+                        <p>Muninn exports use a standardized format for portability.</p>
+                        
+                        <div class="code-block" style="margin-top: 16px;">
+                            <code><span class="comment">// .muninn file structure</span>
+{
+  <span class="string">"version"</span>: <span class="string">"1.0"</span>,
+  <span class="string">"format"</span>: <span class="string">"muninn-capsule"</span>,
+  <span class="string">"exported_at"</span>: <span class="string">"2026-03-22T08:30:00Z"</span>,
+  <span class="string">"memories"</span>: [...],
+  <span class="string">"entities"</span>: [...],
+  <span class="string">"checksum"</span>: <span class="string">"sha256:..."</span>
+}</code>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Docs Tab -->
+                <div id="docsTab" class="hidden">
+                    <div class="card">
+                        <h2>Quick Start</h2>
+                        <p>Connect your AI agent to Muninn in seconds.</p>
+                        
+                        <h3 style="margin-top: 24px; margin-bottom: 12px; font-size: 14px; color: #71717a;">REST API</h3>
+                        <div class="code-block">
+                            <code><span class="comment"># Store a memory</span>
+curl -X POST https://www.muninn.au/api/memories \
+  -H "Authorization: Bearer <span id="codeApiKey">YOUR_API_KEY</span>" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Phillip prefers Australian English in prompts"}'
+
+<span class="comment"># Search memories</span>
+curl "https://www.muninn.au/api/memories?q=phillip+language" \
+  -H "Authorization: Bearer <span id="codeApiKey2">YOUR_API_KEY</span>"</code>
+                        </div>
+                        
+                        <h3 style="margin-top: 24px; margin-bottom: 12px; font-size: 14px; color: #71717a;">OpenClaw Integration</h3>
+                        <div class="code-block">
+                            <code><span class="comment"># In your SKILL.md:</span>
+<span class="keyword">const</span> MUNINN_API_KEY = process.env.MUNINN_API_KEY;
+
+<span class="comment"># Use mcporter:</span>
+mcporter call muninn.memory_remember --args '{"content": "..."}'</code>
+                        </div>
+                        
+                        <h3 style="margin-top: 24px; margin-bottom: 12px; font-size: 14px; color: #71717a;">Claude Desktop</h3>
+                        <div class="code-block">
+                            <code><span class="comment"># Add to claude_desktop_config.json:</span>
+{
+  <span class="string">"mcpServers"</span>: {
+    <span class="string">"muninn"</span>: {
+      <span class="string">"command"</span>: <span class="string">"mcporter"</span>,
+      <span class="string">"args"</span>: [<span class="string">"call"</span>, <span class="string">"--server"</span>, <span class="string">"muninn"</span>]
+    }
+  }
+}</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <script>
+        const API_BASE = 'https://www.muninn.au/api';
+        
+        // State
+        let accessToken = localStorage.getItem('muninn_access_token');
+        let currentTab = 'keys';
+        let selectedProvider = null;
+        
+        // Check if logged in
+        function checkAuth() {
+            if (accessToken) {
+                showDashboard();
+            } else {
+                showAuth();
+            }
+        }
+        
+        // Show auth forms
+        function showAuth() {
+            document.getElementById('authSection').classList.remove('hidden');
+            document.getElementById('dashboardSection').classList.add('hidden');
+        }
+        
+        // Show dashboard
+        async function showDashboard() {
+            document.getElementById('authSection').classList.add('hidden');
+            document.getElementById('dashboardSection').classList.remove('hidden');
+            
+            // Fetch user data
+            try {
+                const res = await fetch(`${API_BASE}/auth?action=me`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (!res.ok) {
+                    localStorage.removeItem('muninn_access_token');
+                    showAuth();
+                    return;
+                }
+                
+                const data = await res.json();
+                
+                // Update API key displays
+                if (data.api_keys && data.api_keys.length > 0) {
+                    // Keys exist but we don't show the full key - user needs to create new one
+                    document.getElementById('apiKeyDisplay').textContent = '••••' + (data.api_keys[0].key_prefix || '••••');
+                    updateKeyList(data.api_keys);
+                }
+                
+                // Update provider config
+                if (data.provider_config) {
+                    document.getElementById('currentProviderName').textContent = 
+                        data.provider_config.provider.charAt(0).toUpperCase() + data.provider_config.provider.slice(1);
+                }
+            } catch (e) {
+                console.error('Failed to fetch user data:', e);
+            }
+        }
+        
+        // Login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            try {
+                const res = await fetch(`${API_BASE}/auth?action=login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    document.getElementById('loginError').textContent = data.error || 'Login failed';
+                    document.getElementById('loginError').classList.remove('hidden');
+                    return;
+                }
+                
+                accessToken = data.session.access_token;
+                localStorage.setItem('muninn_access_token', accessToken);
+                showDashboard();
+            } catch (e) {
+                document.getElementById('loginError').textContent = 'Network error. Please try again.';
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        });
+        
+        // Signup
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            const organization_name = document.getElementById('orgName').value || undefined;
+            
+            try {
+                const res = await fetch(`${API_BASE}/auth?action=signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, organization_name })
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    document.getElementById('signupError').textContent = data.error || 'Signup failed';
+                    document.getElementById('signupError').classList.remove('hidden');
+                    return;
+                }
+                
+                // Show API key
+                if (data.api_key) {
+                    alert(`Account created! Your API key is:\n\n${data.api_key}\n\nPlease verify your email to activate your account.`);
+                } else {
+                    alert('Account created! Please check your email to verify your account.');
+                }
+                document.getElementById('loginEmail').value = email;
+                showLoginCard();
+            } catch (e) {
+                document.getElementById('signupError').textContent = 'Network error. Please try again.';
+                document.getElementById('signupError').classList.remove('hidden');
+            }
+        });
+        
+        // Toggle between login/signup
+        document.getElementById('showSignup').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('loginCard').classList.add('hidden');
+            document.getElementById('signupCard').classList.remove('hidden');
+        });
+        
+        document.getElementById('showLogin').addEventListener('click', (e) => {
+            e.preventDefault();
+            showLoginCard();
+        });
+        
+        document.getElementById('showReset').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('loginCard').classList.add('hidden');
+            document.getElementById('resetCard').classList.remove('hidden');
+        });
+        
+        document.getElementById('showLoginFromReset').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('resetCard').classList.add('hidden');
+            document.getElementById('loginCard').classList.remove('hidden');
+        });
+        
+        function showLoginCard() {
+            document.getElementById('signupCard').classList.add('hidden');
+            document.getElementById('resetCard').classList.add('hidden');
+            document.getElementById('loginCard').classList.remove('hidden');
+        }
+        
+        // Password reset
+        document.getElementById('resetForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('resetEmail').value;
+            
+            try {
+                const res = await fetch(`${API_BASE}/auth?action=reset`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    document.getElementById('resetError').textContent = data.error || 'Reset failed';
+                    document.getElementById('resetError').classList.remove('hidden');
+                    document.getElementById('resetSuccess').classList.add('hidden');
+                    return;
+                }
+                
+                document.getElementById('resetSuccess').textContent = data.message;
+                document.getElementById('resetSuccess').classList.remove('hidden');
+                document.getElementById('resetError').classList.add('hidden');
+            } catch (e) {
+                document.getElementById('resetError').textContent = 'Network error. Please try again.';
+                document.getElementById('resetError').classList.remove('hidden');
+                document.getElementById('resetSuccess').classList.add('hidden');
+            }
+        });
+        
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                await fetch(`${API_BASE}/auth-logout`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+            } catch (e) {}
+            
+            localStorage.removeItem('muninn_access_token');
+            accessToken = null;
+            showAuth();
+        });
+        
+        // Tabs
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                currentTab = tab.dataset.tab;
+                
+                // Update tab styles
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Show/hide content
+                document.querySelectorAll('[id$="Tab"]').forEach(t => t.classList.add('hidden'));
+                document.getElementById(`${currentTab}Tab`).classList.remove('hidden');
+                
+                // Load data for the tab
+                onTabChange(currentTab);
+            });
+        });
+        
+        // Copy API key
+        function copyApiKey() {
+            const key = document.getElementById('apiKeyDisplay').textContent;
+            navigator.clipboard.writeText(key);
+            alert('API key copied to clipboard!');
+        }
+        
+        // Create new key
+        async function createNewKey() {
+            if (!confirm('Generate a new API key? Your old key will stop working.')) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/keys`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name: 'New key' })
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    alert(data.error || 'Failed to create key');
+                    return;
+                }
+                
+                document.getElementById('apiKeyDisplay').textContent = data.key;
+                alert('New API key created! Store it securely - it cannot be retrieved again.');
+            } catch (e) {
+                alert('Network error. Please try again.');
+            }
+        }
+        
+        // Update key list
+        function updateKeyList(keys) {
+            const list = document.getElementById('keyList');
+            list.innerHTML = keys.map(key => `
+                <li>
+                    <div>
+                        <div class="key-name">${key.name || 'API Key'}</div>
+                        <div class="key-meta">Created: ${new Date(key.created_at).toLocaleDateString()} • ${key.usage_count || 0} / ${key.usage_limit} calls</div>
+                    </div>
+                    <div>
+                        ${key.active ? '<span style="color: #22c55e;">Active</span>' : '<span style="color: #ef4444;">Revoked</span>'}
+                    </div>
+                </li>
+            `).join('');
+        }
+        
+        // Provider selection
+        function selectProvider(provider) {
+            selectedProvider = provider;
+            
+            document.querySelectorAll('.provider-card').forEach(card => card.classList.remove('active'));
+            document.querySelector(`[data-provider="${provider}"]`).classList.add('active');
+            
+            document.getElementById('providerForm').classList.remove('hidden');
+            
+            // Show/hide base URL field
+            if (provider === 'ollama') {
+                document.getElementById('baseUrlGroup').classList.remove('hidden');
+                document.getElementById('providerBaseUrl').value = 'http://localhost:11434';
+            } else {
+                document.getElementById('baseUrlGroup').classList.add('hidden');
+            }
+        }
+        
+        // Save provider
+        document.getElementById('providerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const provider = selectedProvider;
+            const api_key = document.getElementById('providerApiKey').value;
+            const base_url = document.getElementById('providerBaseUrl').value || undefined;
+            const model = document.getElementById('providerModel').value || undefined;
+            
+            if (provider !== 'ollama' && !api_key) {
+                alert('API key is required');
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API_BASE}/settings/provider`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ provider, api_key, base_url, model })
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    alert(data.error || 'Failed to save provider');
+                    return;
+                }
+                
+                document.getElementById('currentProviderName').textContent = provider.charAt(0).toUpperCase() + provider.slice(1);
+                alert('Provider saved successfully!');
+            } catch (e) {
+                alert('Network error. Please try again.');
+            }
+        });
+        
+        // Export memories
+        async function exportMemories() {
+            const btn = document.getElementById('exportBtn');
+            btn.textContent = 'Exporting...';
+            
+            try {
+                const res = await fetch(`${API_BASE}/export`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Export failed');
+                }
+                
+                const data = await res.json();
+                
+                // Download the file
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `muninn-export-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                btn.textContent = 'Download Export';
+                alert(`Exported ${data.metadata.total_memories} memories and ${data.metadata.total_entities} entities.`);
+            } catch (e) {
+                btn.textContent = 'Download Export';
+                alert('Export failed: ' + e.message);
+            }
+        }
+        
+        // Import memories
+        async function handleImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const status = document.getElementById('importStatus');
+            status.textContent = 'Reading file...';
+            
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                
+                // Validate format
+                if (data.format !== 'muninn-capsule') {
+                    throw new Error('Invalid file format. Expected muninn-capsule.');
+                }
+                
+                status.textContent = `Importing ${data.memories?.length || 0} memories...`;
+                
+                const res = await fetch(`${API_BASE}/import`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Import failed');
+                }
+                
+                const result = await res.json();
+                status.textContent = `Imported ${result.imported} memories, ${result.skipped} skipped.`;
+                status.style.color = '#22c55e';
+            } catch (e) {
+                status.textContent = 'Import failed: ' + e.message;
+                status.style.color = '#ef4444';
+            }
+            
+            // Reset file input
+            event.target.value = '';
+        }
+        
+        // Studio - Memory Explorer
+        let currentPage = 1;
+        const pageSize = 20;
+        
+        async function loadMemories(page = 1) {
+            const search = document.getElementById('memorySearch')?.value || '';
+            const entity = document.getElementById('entityFilter')?.value || '';
+            const dateFrom = document.getElementById('dateFrom')?.value || '';
+            const dateTo = document.getElementById('dateTo')?.value || '';
+            
+            const params = new URLSearchParams({
+                page,
+                limit: pageSize,
+                ...(search && { search }),
+                ...(entity && { entity }),
+                ...(dateFrom && { date_from: dateFrom }),
+                ...(dateTo && { date_to: dateTo })
+            });
+            
+            try {
+                const res = await fetch(`${API_BASE}/memories/list?${params}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) throw new Error(data.error);
+                
+                renderMemories(data.memories || []);
+                renderPagination(data.total || 0, page);
+            } catch (e) {
+                document.getElementById('memoriesList').innerHTML = `<p style="color: #ef4444; text-align: center;">Error: ${e.message}</p>`;
+            }
+        }
+        
+        function renderMemories(memories) {
+            if (memories.length === 0) {
+                document.getElementById('memoriesList').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🧠</div>
+                        <div class="empty-state-title">No memories found</div>
+                        <div class="empty-state-text">Try adjusting your search filters or add memories via the API.</div>
+                    </div>`;
+                return;
+            }
+            
+            const html = memories.map(m => `
+                <div class="memory-item">
+                    <div class="memory-content">${escapeHtml(m.content || '')}</div>
+                    <div class="memory-meta">
+                        <span title="Importance score">📊 ${(m.salience || 0.5).toFixed(2)}</span>
+                        <span>📅 ${new Date(m.created_at).toLocaleDateString()}</span>
+                        ${m.entities?.length ? `<span>🏷️ ${m.entities.join(', ')}</span>` : ''}
+                    </div>
+                    <div class="memory-actions">
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="editMemory('${m.id}')">Edit</button>
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px; color: #ef4444;" onclick="deleteMemory('${m.id}')">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('memoriesList').innerHTML = html;
+        }
+        
+        function renderPagination(total, currentPage) {
+            const totalPages = Math.ceil(total / pageSize);
+            if (totalPages <= 1) {
+                document.getElementById('memoriesPagination').innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            for (let i = 1; i <= totalPages; i++) {
+                html += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-secondary'}" style="padding: 4px 12px;" onclick="loadMemories(${i})">${i}</button>`;
+            }
+            document.getElementById('memoriesPagination').innerHTML = html;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function filterMemories() {
+            loadMemories(1);
+        }
+        
+        async function editMemory(id) {
+            const salience = prompt('Enter new salience (0.0 - 1.0):');
+            if (salience === null) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/memories/${id}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ salience: parseFloat(salience) })
+                });
+                
+                if (!res.ok) throw new Error('Failed to update');
+                loadMemories(currentPage);
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        async function deleteMemory(id) {
+            if (!confirm('Are you sure you want to delete this memory?')) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/memories/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (!res.ok) throw new Error('Failed to delete');
+                loadMemories(currentPage);
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        // Analytics
+        async function loadAnalytics() {
+            try {
+                const res = await fetch(`${API_BASE}/analytics`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) throw new Error(data.error);
+                
+                // Update stats with better fallbacks
+                document.getElementById('totalMemories').textContent = data.total_memories?.toLocaleString() || '0';
+                document.getElementById('totalRetrievals').textContent = data.total_retrievals?.toLocaleString() || '0';
+                document.getElementById('avgSalience').textContent = (data.avg_salience || 0).toFixed(2);
+                document.getElementById('growthRate').textContent = `${data.growth_rate >= 0 ? '+' : ''}${data.growth_rate || 0}%`;
+                
+                // Render charts
+                renderGrowthChart(data.growth_data || []);
+                renderTopEntities(data.top_entities || []);
+                renderSalienceDistribution(data.salience_distribution || {});
+            } catch (e) {
+                console.error('Analytics error:', e);
+                // Show empty state on error
+                document.getElementById('totalMemories').textContent = '—';
+                document.getElementById('totalRetrievals').textContent = '—';
+                document.getElementById('avgSalience').textContent = '—';
+                document.getElementById('growthRate').textContent = '—';
+                renderGrowthChart([]);
+                renderTopEntities([]);
+                renderSalienceDistribution({});
+            }
+        }
+        
+        function renderGrowthChart(data) {
+            if (data.length === 0) {
+                document.getElementById('growthChart').innerHTML = `
+                    <p style="color: var(--gray-400); text-align: center; width: 100%;">No growth data yet. Start adding memories to see trends.</p>`;
+                return;
+            }
+            
+            const max = Math.max(...data.map(d => d.count), 1);
+            const bars = data.map(d => {
+                const height = (d.count / max) * 100;
+                return `<div class="chart-bar" style="height: ${Math.max(height, 4)}%;" title="${d.count} memories"></div>`;
+            }).join('');
+            
+            document.getElementById('growthChart').innerHTML = bars;
+        }
+        
+        function renderTopEntities(entities) {
+            if (entities.length === 0) {
+                document.getElementById('topEntities').innerHTML = `
+                    <div class="empty-state" style="padding: 24px;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">🏷️</div>
+                        <div class="empty-state-title">No entities yet</div>
+                        <div class="empty-state-text">Entities are extracted automatically from your memories.</div>
+                    </div>`;
+                return;
+            }
+            
+            const html = entities.map(e => `
+                <div class="entity-item">
+                    <span class="entity-name">${escapeHtml(e.name)}</span>
+                    <span class="entity-count">${e.count} memories</span>
+                </div>
+            `).join('');
+            
+            document.getElementById('topEntities').innerHTML = html;
+        }
+        
+        function renderSalienceDistribution(distribution) {
+            const bins = Object.entries(distribution);
+            if (bins.length === 0) {
+                // Show placeholder distribution for empty data
+                document.getElementById('salienceDistribution').innerHTML = `
+                    <div class="distribution-bars">
+                        <div class="distribution-bar-wrapper">
+                            <div class="distribution-bar" style="height: 20%;"></div>
+                            <div class="distribution-label">0.0-0.2</div>
+                        </div>
+                        <div class="distribution-bar-wrapper">
+                            <div class="distribution-bar" style="height: 40%;"></div>
+                            <div class="distribution-label">0.2-0.4</div>
+                        </div>
+                        <div class="distribution-bar-wrapper">
+                            <div class="distribution-bar" style="height: 60%;"></div>
+                            <div class="distribution-label">0.4-0.6</div>
+                        </div>
+                        <div class="distribution-bar-wrapper">
+                            <div class="distribution-bar" style="height: 80%;"></div>
+                            <div class="distribution-label">0.6-0.8</div>
+                        </div>
+                        <div class="distribution-bar-wrapper">
+                            <div class="distribution-bar" style="height: 30%;"></div>
+                            <div class="distribution-label">0.8-1.0</div>
+                        </div>
+                    </div>
+                    <p style="color: var(--gray-400); font-size: 12px; text-align: center; margin-top: 12px;">Add memories to see distribution</p>`;
+                return;
+            }
+            
+            const max = Math.max(...bins.map(([, count]) => count));
+            const bars = bins.map(([range, count]) => {
+                const height = max > 0 ? (count / max) * 100 : 0;
+                return `<div class="distribution-bar-wrapper">
+                    <div class="distribution-bar" style="height: ${Math.max(height, 5)}%;"></div>
+                    <div class="distribution-label">${range}</div>
+                </div>`;
+            }).join('');
+            
+            document.getElementById('salienceDistribution').innerHTML = `<div class="distribution-bars">${bars}</div>`;
+        }
+        
+        // Tab change handler
+        function onTabChange(tab) {
+            if (tab === 'studio') {
+                loadMemories(1);
+            } else if (tab === 'analytics') {
+                loadAnalytics();
+            }
+        }
+        
+        // Initialize
+        checkAuth();
+    </script>
+</body>
+</html>

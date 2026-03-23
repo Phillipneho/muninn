@@ -1,0 +1,377 @@
+# Getting Started with Muninn
+
+**Memory-as-a-Service for AI Agents**
+
+---
+
+## What is Muninn?
+
+Muninn gives your AI agents persistent memory. Instead of forgetting everything after each conversation, agents can:
+
+- **Store memories** — Facts, preferences, context
+- **Recall intelligently** — Semantic search + keyword matching
+- **Learn from interactions** — Build knowledge over time
+
+---
+
+## Quick Start
+
+### Step 1: Create Account
+
+1. Go to [muninn.au/dashboard](https://www.muninn.au/dashboard)
+2. Click **Sign Up**
+3. Enter your email and password (8+ characters)
+4. Your API key appears immediately — **save it!**
+
+```
+Your API key: muninn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+> ⚠️ **Important:** Your API key is only shown once. Store it securely.
+
+### Step 2: Verify Email
+
+Check your inbox for a verification email from Supabase. Click the link to activate your account.
+
+### Step 3: Test Your Key
+
+```bash
+# Store a memory
+curl -X POST https://www.muninn.au/api/memories \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "My name is Phillip and I prefer Australian English"}'
+
+# Search memories
+curl "https://www.muninn.au/api/memories?q=name+preference" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+---
+
+## Pricing
+
+| Tier | Price | Features |
+|------|-------|----------|
+| **Core** | Free | Local SQLite + Ollama, unlimited usage |
+| **Pro** | $10/month | Cloud hosting, 50,000 API calls, BYOK support |
+| **Enterprise** | $79/month | Dedicated infrastructure, team management, unlimited |
+
+### Free Tier (Core)
+
+Muninn Core runs entirely on your machine:
+- Local SQLite database
+- Ollama embeddings (no API key needed)
+- All features unlocked
+- No limits
+
+Perfect for development, testing, and privacy-conscious users.
+
+### Pro Tier
+
+Cloud convenience:
+- Hosted database
+- Automatic backups
+- 50,000 API calls/month
+- Bring Your Own Key for embeddings
+
+### Enterprise Tier
+
+For teams:
+- Unlimited usage
+- Team management
+- Priority support
+- Custom integrations
+
+---
+
+## BYOK (Bring Your Own Key)
+
+Pro and Enterprise users can use their own embedding provider:
+
+### Supported Providers
+
+| Provider | Model | Cost |
+|----------|-------|------|
+| OpenAI | text-embedding-3-small | ~$0.02/1M tokens |
+| Gemini | gemini-embedding-exp-03-07 | Free tier available |
+| Anthropic | via OpenRouter | Varies |
+| Ollama | nomic-embed-text | Free (local) |
+| OpenRouter | any model | Varies |
+
+### How to Configure BYOK
+
+1. Go to **Dashboard** → **Provider Settings**
+2. Select your provider
+3. Enter your API key
+4. (Optional) Choose a model
+5. Click **Save**
+
+Your key is encrypted and stored securely. We never see your actual key.
+
+### Example: OpenAI
+
+```
+Provider: OpenAI
+API Key: sk-xxxxxxxxxxxxxxxx
+Model: text-embedding-3-small (default)
+```
+
+### Example: Gemini
+
+```
+Provider: Gemini
+API Key: AIza-xxxxxxxxxxxxxxxx
+Model: gemini-embedding-exp-03-07 (default)
+```
+
+### Example: Ollama (Free, Local)
+
+```
+Provider: Ollama
+Model: nomic-embed-text
+API Key: (not required)
+```
+
+Make sure Ollama is running locally:
+```bash
+ollama pull nomic-embed-text
+ollama serve
+```
+
+---
+
+## API Reference
+
+### Authentication
+
+All API requests require your API key:
+
+```bash
+Authorization: Bearer muninn_xxxxxxxxxxxx
+```
+
+### Store Memory
+
+```bash
+POST /api/memories
+Authorization: Bearer YOUR_API_KEY
+Content-Type: application/json
+
+{
+  "content": "Phillip prefers Australian English",
+  "metadata": {
+    "type": "preference",
+    "category": "language"
+  }
+}
+```
+
+### Search Memories
+
+```bash
+GET /api/memories?q=language+preference
+Authorization: Bearer YOUR_API_KEY
+```
+
+### List Memories
+
+```bash
+GET /api/memories?limit=10&offset=0
+Authorization: Bearer YOUR_API_KEY
+```
+
+### Delete Memory
+
+```bash
+DELETE /api/memories?id=MEMORY_ID
+Authorization: Bearer YOUR_API_KEY
+```
+
+---
+
+## Integration Guides
+
+### OpenClaw Agents
+
+Add to your agent's `MEMORY.md`:
+
+```markdown
+## Memory
+
+MUNINN_API_KEY=muninn_xxxxxxxxxxxx
+```
+
+OpenClaw automatically uses Muninn for persistent memory.
+
+### Claude Desktop (MCP)
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "muninn": {
+      "command": "mcporter",
+      "args": ["call", "--server", "muninn"]
+    }
+  }
+}
+```
+
+### Python
+
+```python
+import requests
+
+API_KEY = "muninn_xxxxxxxxxxxx"
+BASE_URL = "https://www.muninn.au/api"
+
+# Store
+response = requests.post(
+    f"{BASE_URL}/memories",
+    headers={"Authorization": f"Bearer {API_KEY}"},
+    json={"content": "Important: Always use Australian English"}
+)
+
+# Search
+response = requests.get(
+    f"{BASE_URL}/memories",
+    headers={"Authorization": f"Bearer {API_KEY}"},
+    params={"q": "language preference"}
+)
+```
+
+### Node.js
+
+```javascript
+const API_KEY = 'muninn_xxxxxxxxxxxx';
+const BASE_URL = 'https://www.muninn.au/api';
+
+// Store
+const storeResponse = await fetch(`${BASE_URL}/memories`, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${API_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ content: 'Phillip prefers Australian English' })
+});
+
+// Search
+const searchResponse = await fetch(`${BASE_URL}/memories?q=language+preference`, {
+  headers: { 'Authorization': `Bearer ${API_KEY}` }
+});
+```
+
+---
+
+## Dashboard Features
+
+### Manage API Keys
+
+1. **View Keys** — See all your API keys and their prefixes
+2. **Create New Key** — Generate additional keys for different projects
+3. **Revoke Keys** — Disable compromised keys instantly
+
+### Usage Stats
+
+Track your API usage:
+- Total calls this month
+- Calls by endpoint
+- Rate limit status
+
+### Provider Settings
+
+Configure BYOK:
+- Set preferred embedding provider
+- Manage API keys
+- Switch between providers
+
+---
+
+## Security
+
+### API Key Storage
+
+- Keys are hashed using SHA-256
+- Only the prefix (first 12 chars) is stored in plain text
+- Full key is only shown once at creation
+
+### BYOK Encryption
+
+- Your embedding provider keys are encrypted with AES-256-CBC
+- Each organization has unique encryption
+- Keys are never visible after saving
+
+### Data Privacy
+
+- Memories are stored in your organization's isolated database
+- Row-Level Security (RLS) ensures complete isolation
+- We cannot read your memories
+
+---
+
+## Troubleshooting
+
+### "Invalid or expired token"
+
+Your JWT token expired. Log in again:
+
+```bash
+POST /api/auth?action=login
+{"email": "you@example.com", "password": "yourpassword"}
+```
+
+Use the returned `access_token` for subsequent requests.
+
+### "No organization found"
+
+This means your account wasn't fully created. Contact support at kh@agentmail.to.
+
+### "Rate limit exceeded"
+
+Pro tier: 50,000 calls/month. Check your usage in the dashboard. Upgrade to Enterprise for unlimited.
+
+### BYOK Not Working
+
+1. Check your key is correct
+2. Verify the model name matches the provider
+3. For Ollama, ensure it's running: `ollama serve`
+
+### Email Verification Not Received
+
+1. Check your spam folder
+2. Wait 5 minutes
+3. Request a new verification email from the dashboard
+
+---
+
+## Support
+
+- **Email:** kh@agentmail.to
+- **Dashboard:** [muninn.au/dashboard](https://www.muninn.au/dashboard)
+- **Status:** [status.muninn.au](https://status.muninn.au)
+
+---
+
+## FAQ
+
+**Q: Is there a free tier?**
+A: Yes! Muninn Core runs locally with SQLite + Ollama. No cloud, no cost, no limits.
+
+**Q: Can I use my own OpenAI key?**
+A: Yes, Pro and Enterprise users can configure BYOK in the dashboard.
+
+**Q: How is my data stored?**
+A: Memories are stored in Supabase PostgreSQL with Row-Level Security. Your data is isolated by organization.
+
+**Q: What's the difference between Core and Pro?**
+A: Core runs locally on your machine. Pro runs in the cloud with hosted database and API.
+
+**Q: Can I switch plans?**
+A: Yes, upgrade or downgrade anytime from the dashboard.
+
+---
+
+*Last updated: 2026-03-22*
