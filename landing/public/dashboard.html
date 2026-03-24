@@ -450,6 +450,7 @@
                     <button class="tab" data-tab="provider">LLM Provider</button>
                     <button class="tab" data-tab="studio">Studio</button>
                     <button class="tab" data-tab="analytics">Analytics</button>
+                    <button class="tab" data-tab="audit">Audit</button>
                     <button class="tab" data-tab="usage">Usage</button>
                     <button class="tab" data-tab="export">Export</button>
                     <button class="tab" data-tab="docs">Integration</button>
@@ -655,6 +656,74 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Audit Tab -->
+                <div id="auditTab" class="hidden">
+                    <div class="card">
+                        <h2>🏥 Memory Health</h2>
+                        <p>Monitor memory integrity, staleness, and access patterns.</p>
+                        
+                        <div style="margin-top: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: var(--emerald);" id="healthScore">-</div>
+                                <div class="stat-label">Health Score</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: #22c55e;" id="verifiedCount">-</div>
+                                <div class="stat-label">Verified Memories</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: #f59e0b;" id="staleCount">-</div>
+                                <div class="stat-label">Stale Memories</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: #ef4444;" id="flaggedCount">-</div>
+                                <div class="stat-label">Flagged Issues</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>⚠️ Contradictions Queue</h2>
+                        <p>Memories that may conflict with each other. Review and resolve.</p>
+                        
+                        <div id="contradictionsQueue" style="margin-top: 24px;">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">✓</div>
+                                <div class="empty-state-title">All Clear</div>
+                                <div class="empty-state-text">No contradictions detected.</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>📊 Access Patterns</h2>
+                        <p>How your memories are being accessed.</p>
+                        
+                        <div style="margin-top: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                            <div>
+                                <h3 style="font-size: 14px; color: var(--gray-400); margin-bottom: 12px;">Most Accessed Memories</h3>
+                                <div id="topMemories" style="background: var(--obsidian); border-radius: 8px; padding: 16px;">
+                                    <div style="color: var(--gray-600); font-size: 13px;">Loading...</div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 14px; color: var(--gray-400); margin-bottom: 12px;">Retrieval Distribution</h3>
+                                <div id="retrievalDist" style="background: var(--obsidian); border-radius: 8px; padding: 16px;">
+                                    <div style="color: var(--gray-600); font-size: 13px;">Loading...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>🕐 Staleness Timeline</h2>
+                        <p>Memory freshness over time.</p>
+                        <div id="stalenessTimeline" style="margin-top: 24px; height: 200px; background: var(--obsidian); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <div style="color: var(--gray-600);">Loading timeline...</div>
                         </div>
                     </div>
                 </div>
@@ -1454,12 +1523,97 @@ mcporter call muninn.memory_remember --args '{"content": "..."}'</code>
             document.getElementById('salienceDistribution').innerHTML = `<div class="distribution-bars">${bars}</div>`;
         }
         
+        async function loadAudit() {
+            try {
+                // Load health data
+                const healthRes = await fetch(`${API_BASE}/audit/health`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('muninn_api_key')}` }
+                });
+                const health = await healthRes.json();
+                
+                if (health.success !== false) {
+                    document.getElementById('healthScore').textContent = (health.healthScore || 100) + '%';
+                    document.getElementById('verifiedCount').textContent = health.verified || 0;
+                    document.getElementById('staleCount').textContent = health.stale || 0;
+                    document.getElementById('flaggedCount').textContent = health.flagged || 0;
+                }
+                
+                // Load contradictions
+                const contradRes = await fetch(`${API_BASE}/audit/contradictions?status=unresolved`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('muninn_api_key')}` }
+                });
+                const contrad = await contradRes.json();
+                
+                if (contrad.contradictions && contrad.contradictions.length > 0) {
+                    const html = contrad.contradictions.map(c => `
+                        <div style="background: var(--obsidian); border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 3px solid ${c.confidence > 0.8 ? '#ef4444' : '#f59e0b'};">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 500;">${escapeHtml(c.entity || 'Unknown Entity')}</span>
+                                <span style="font-size: 12px; color: var(--gray-400);">${Math.round(c.confidence * 100)}% confidence</span>
+                            </div>
+                            <div style="font-size: 13px; color: var(--gray-400);">
+                                <strong>A:</strong> ${escapeHtml(c.memoryA?.substring(0, 100) || 'N/A')}...
+                            </div>
+                            <div style="font-size: 13px; color: var(--gray-400); margin-top: 4px;">
+                                <strong>B:</strong> ${escapeHtml(c.memoryB?.substring(0, 100) || 'N/A')}...
+                            </div>
+                        </div>
+                    `).join('');
+                    document.getElementById('contradictionsQueue').innerHTML = html;
+                }
+                
+                // Load access patterns
+                const accessRes = await fetch(`${API_BASE}/audit/access`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('muninn_api_key')}` }
+                });
+                const access = await accessRes.json();
+                
+                if (access.topMemories) {
+                    const memHtml = access.topMemories.slice(0, 5).map(m => `
+                        <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--gray-800);">
+                            <span style="font-size: 13px;">${escapeHtml(m.id?.substring(0, 20) || 'Memory')}...</span>
+                            <span style="color: var(--emerald); font-size: 13px;">${m.count} accesses</span>
+                        </div>
+                    `).join('');
+                    document.getElementById('topMemories').innerHTML = memHtml || '<div style="color: var(--gray-600);">No access data yet</div>';
+                }
+                
+                if (access.retrievalDistribution) {
+                    const distHtml = Object.entries(access.retrievalDistribution).map(([type, count]) => `
+                        <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--gray-800);">
+                            <span style="font-size: 13px;">${type}</span>
+                            <span style="color: var(--gray-400); font-size: 13px;">${count}</span>
+                        </div>
+                    `).join('');
+                    document.getElementById('retrievalDist').innerHTML = distHtml || '<div style="color: var(--gray-600);">No distribution data</div>';
+                }
+                
+                // Load staleness
+                const staleRes = await fetch(`${API_BASE}/audit/staleness`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('muninn_api_key')}` }
+                });
+                const stale = await staleRes.json();
+                
+                if (stale.freshnessTimeline) {
+                    const bars = stale.freshnessTimeline.map(d => {
+                        const height = (d.freshness / 100) * 150;
+                        return `<div style="width: 8px; height: ${height}px; background: var(--emerald); border-radius: 2px; margin: 0 2px;" title="${d.date}: ${d.freshness}%"></div>`;
+                    }).join('');
+                    document.getElementById('stalenessTimeline').innerHTML = `<div style="display: flex; align-items: flex-end; height: 150px;">${bars}</div>`;
+                }
+            } catch (e) {
+                console.error('Failed to load audit data:', e);
+            }
+        }
+        
         // Tab change handler
         function onTabChange(tab) {
             if (tab === 'studio') {
                 loadMemories(1);
             } else if (tab === 'analytics') {
                 loadAnalytics();
+            } else if (tab === 'audit') {
+                loadAudit();
             }
         }
         
