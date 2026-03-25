@@ -1095,7 +1095,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     path = path.slice(4) || '/';
   }
   
+  // Get action parameter for action-based routing
+  const action = req.query.action as string;
+  
   try {
+    // Action-based routing (takes priority over path)
+    if (action && action.startsWith('audit:')) {
+      const ctx = await authenticate(req);
+      return handleAudit(req, res, ctx);
+    }
+    
     // Health check (no auth)
     if (req.method === 'GET' && path === '/health') {
       return handleHealth(req, res);
