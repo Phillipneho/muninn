@@ -1528,7 +1528,7 @@ mcporter call muninn.memory_remember --args '{"content": "..."}'</code>
                 const headers = { 'Authorization': `Bearer ${localStorage.getItem('muninn_api_key')}` };
                 
                 // Load health data
-                const healthRes = await fetch(`${API_BASE}/audit?action=health`, { headers });
+                const healthRes = await fetch(`${API_BASE}?action=audit:health`, { headers });
                 const health = await healthRes.json();
                 
                 if (health.success !== false) {
@@ -1539,7 +1539,7 @@ mcporter call muninn.memory_remember --args '{"content": "..."}'</code>
                 }
                 
                 // Load contradictions
-                const contradRes = await fetch(`${API_BASE}/audit?action=contradictions&status=unresolved`, { headers });
+                const contradRes = await fetch(`${API_BASE}?action=audit:contradictions&status=unresolved`, { headers });
                 const contrad = await contradRes.json();
                 
                 if (contrad.contradictions && contrad.contradictions.length > 0) {
@@ -1561,7 +1561,7 @@ mcporter call muninn.memory_remember --args '{"content": "..."}'</code>
                 }
                 
                 // Load access patterns
-                const accessRes = await fetch(`${API_BASE}/audit?action=access`, { headers });
+                const accessRes = await fetch(`${API_BASE}?action=audit:access`, { headers });
                 const access = await accessRes.json();
                 
                 if (access.topMemories) {
@@ -1585,7 +1585,7 @@ mcporter call muninn.memory_remember --args '{"content": "..."}'</code>
                 }
                 
                 // Load staleness
-                const staleRes = await fetch(`${API_BASE}/audit?action=staleness`, { headers });
+                const staleRes = await fetch(`${API_BASE}?action=audit:staleness`, { headers });
                 const stale = await staleRes.json();
                 
                 if (stale.freshnessTimeline) {
