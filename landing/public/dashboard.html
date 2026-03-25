@@ -1525,9 +1525,10 @@ mcporter call muninn.memory_remember --args '{"content": "..."}'</code>
         
         async function loadAudit() {
             try {
-                const headers = { 'Authorization': `Bearer ${localStorage.getItem('muninn_api_key')}` };
+                const headers = { 'Authorization': `Bearer ${accessToken}` };
                 
                 // Load health data
+                console.log('Loading health...');
                 const healthRes = await fetch(`${API_BASE}?action=audit:health`, { headers });
                 const health = await healthRes.json();
                 
