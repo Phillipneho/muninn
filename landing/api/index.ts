@@ -844,8 +844,9 @@ async function getAuditHealth(ctx: AuthContext, res: VercelResponse) {
       .eq('organization_id', ctx.organizationId)
       .maybeSingle();
     
-    const verified = integrityStats?.verified || 0;
-    const flagged = integrityStats?.flagged || 0;
+    const integrityData = integrityStats as any;
+    const verified = integrityData?.verified || 0;
+    const flagged = integrityData?.flagged || 0;
     
     // Get staleness stats (if table exists)
     const { data: staleStats } = await supabaseService
@@ -854,7 +855,8 @@ async function getAuditHealth(ctx: AuthContext, res: VercelResponse) {
       .eq('organization_id', ctx.organizationId)
       .maybeSingle();
     
-    const stale = staleStats?.stale || 0;
+    const staleData = staleStats as any;
+    const stale = staleData?.stale || 0;
     
     // Calculate health score
     const healthScore = totalMemories && totalMemories > 0 
@@ -1169,11 +1171,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           audit: 'GET /api?action=audit:health|audit:contradictions|audit:access|audit:staleness'
         }
       });
-    }
-    
-    // Audit endpoints
-    if (path === '/audit' || path.startsWith('/audit')) {
-      return handleAudit(req, res, ctx);
     }
     
     return res.status(404).json({ error: 'Not found' });
