@@ -1157,7 +1157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'GET' && path === '/') {
       return res.status(200).json({
         name: 'Muninn Cloud API',
-        version: '2.0.0',
+        version: '2.1.0',
         docs: 'https://github.com/openclaw/muninn',
         endpoints: {
           health: 'GET /health',
