@@ -1561,10 +1561,12 @@ mcporter call muninn.memory_remember --args '{"content": "..."}'</code>
                 }
                 
                 // Load access patterns
+                console.log('Loading access patterns...');
                 const accessRes = await fetch(`${API_BASE}?action=audit:access`, { headers });
                 const access = await accessRes.json();
+                console.log('Access response:', access);
                 
-                if (access.topMemories) {
+                if (access.success && access.topMemories) {
                     const memHtml = access.topMemories.slice(0, 5).map(m => `
                         <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--gray-800);">
                             <span style="font-size: 13px;">${escapeHtml(m.id?.substring(0, 20) || 'Memory')}...</span>
@@ -1585,10 +1587,12 @@ mcporter call muninn.memory_remember --args '{"content": "..."}'</code>
                 }
                 
                 // Load staleness
+                console.log('Loading staleness...');
                 const staleRes = await fetch(`${API_BASE}?action=audit:staleness`, { headers });
                 const stale = await staleRes.json();
+                console.log('Staleness response:', stale);
                 
-                if (stale.freshnessTimeline) {
+                if (stale.success && stale.freshnessTimeline) {
                     const bars = stale.freshnessTimeline.map(d => {
                         const height = (d.freshness / 100) * 150;
                         return `<div style="width: 8px; height: ${height}px; background: var(--emerald); border-radius: 2px; margin: 0 2px;" title="${d.date}: ${d.freshness}%"></div>`;
