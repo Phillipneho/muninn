@@ -1,15 +1,35 @@
 // Muninn v5.2 - Sleep Cycle Consolidation
 // Runs at 2:00 AM to compress Hippocampal observations into Cortex Prototypes
+// + Auto-forgetting (Supermemory parity)
 
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
 import cron from 'node-cron';
+import { runForgettingCycle, ForgettingResult } from './forgetting/index.js';
 
 dotenv.config();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// ============================================
+// FORGETTING CYCLE (SQLite version)
+// ============================================
+
+async function runForgettingCycleSQLite(): Promise<ForgettingResult> {
+  // For SQLite-based databases
+  const Database = require('better-sqlite3');
+  const dbPath = process.env.MUNINN_DB_PATH || '/tmp/muninn-v2.db';
+  const db = new Database(dbPath);
+  
+  try {
+    const result = await runForgettingCycle(db);
+    return result;
+  } finally {
+    db.close();
+  }
+}
 
 // ============================================
 // CONSOLIDATION PROMPT (from sleep-cycle-prompt.md)
@@ -206,10 +226,23 @@ export async function runSleepCycle(entityId?: string): Promise<{
     console.log(`   Prototypes created: ${totalPrototypes}`);
     console.log(`   Observations consolidated: ${totalConsolidated}`);
     
+    // Run forgetting cycle (Supermemory parity)
+    console.log('\n🧹 Running Forgetting Cycle...');
+    let forgettingResult: ForgettingResult = { expired: 0, decayed: 0, totalForgotten: 0 };
+    try {
+      forgettingResult = await runForgettingCycleSQLite();
+      console.log(`   Expired: ${forgettingResult.expired}`);
+      console.log(`   Decayed: ${forgettingResult.decayed}`);
+      console.log(`   Total forgotten: ${forgettingResult.totalForgotten}`);
+    } catch (err) {
+      console.error('   ⚠️ Forgetting cycle failed:', err);
+    }
+    
     return {
       entitiesProcessed: Object.keys(byEntity).length,
       prototypesCreated: totalPrototypes,
-      observationsConsolidated: totalConsolidated
+      observationsConsolidated: totalConsolidated,
+      forgotten: forgettingResult.totalForgotten
     };
     
   } finally {

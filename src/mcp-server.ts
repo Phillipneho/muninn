@@ -6,6 +6,9 @@
  * - Fact-based storage (not session-based)
  * - Bi-temporal model (valid_from/valid_until + created_at/invalidated_at)
  * - Structured retrieval (facts → graph → events → semantic)
+ * - Profile abstraction (static + dynamic facts)
+ * - Auto-forgetting (temporal facts expire)
+ * - Token budget retrieval
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -16,6 +19,18 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { Muninn } from './index.js';
 import type { Fact, Event } from './types.js';
+import { buildProfile, formatProfile, getProfile } from './profile/index.js';
+import { 
+  retrieveWithBudget, 
+  formatForContext,
+  memoryBriefingWithBudget 
+} from './retrieval/budget.js';
+import {
+  detectTemporalFact,
+  classifyMemoryType,
+  runForgettingCycle,
+  getExpiringFacts
+} from './forgetting/index.js';
 
 // Initialize Muninn v2
 const dbPath = process.env.MUNINN_DB_PATH || '/tmp/muninn-v2.db';
@@ -76,6 +91,11 @@ const tools = [
           type: 'number',
           description: 'Maximum results',
           default: 10
+        },
+        maxTokens: {
+          type: 'number',
+          description: 'Maximum tokens to return (budget-aware retrieval)',
+          default: 500
         }
       },
       required: ['query']
@@ -83,13 +103,51 @@ const tools = [
   },
   {
     name: 'memory_briefing',
-    description: 'Get a structured session briefing with key facts, recent changes, and unresolved contradictions.',
+    description: 'Get a structured session briefing with static profile, dynamic context, and relevant memories. Token-efficient (100-200 tokens vs 5000+ for raw memories).',
     inputSchema: {
       type: 'object',
       properties: {
         context: {
           type: 'string',
           description: 'Context for the briefing (e.g., "morning standup", "project review")'
+        },
+        maxTokens: {
+          type: 'number',
+          description: 'Maximum tokens for briefing (default: 500)',
+          default: 500
+        }
+      }
+    }
+  },
+  {
+    name: 'memory_profile',
+    description: 'Get user profile (static facts + dynamic context). Fast (~50ms) for system prompt injection. Returns distilled facts, not raw memories.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        maxStaticFacts: {
+          type: 'number',
+          description: 'Maximum static facts to return (default: 10)',
+          default: 10
+        },
+        maxDynamicFacts: {
+          type: 'number',
+          description: 'Maximum dynamic facts to return (default: 5)',
+          default: 5
+        }
+      }
+    }
+  },
+  {
+    name: 'memory_forget',
+    description: 'Manually forget expired facts or decay old episodes. Also shows facts expiring soon.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['expire', 'decay', 'list'],
+          description: 'Action: expire (remove expired), decay (reduce old episode strength), list (show expiring)'
         }
       }
     }
@@ -163,10 +221,16 @@ async function handleToolCall(name: string, args: any): Promise<any> {
     case 'memory_remember': {
       const { content, source, actor, sessionDate } = args;
       
+      // Detect temporal fact
+      const expiresAt = detectTemporalFact(content);
+      const memoryType = classifyMemoryType(content);
+      
       const result = await muninn.remember(content, {
         source,
         actor,
-        sessionDate
+        sessionDate,
+        memoryType,
+        expiresAt
       });
       
       return {
@@ -176,12 +240,30 @@ async function handleToolCall(name: string, args: any): Promise<any> {
         entitiesCreated: result.entitiesCreated,
         eventsCreated: result.eventsCreated,
         contradictions: result.contradictions,
-        message: `Stored ${result.factsCreated} facts, ${result.entitiesCreated} entities, ${result.eventsCreated} events`
+        memoryType,
+        expiresAt: expiresAt?.toISOString() || null,
+        message: `Stored ${result.factsCreated} facts (${memoryType}${expiresAt ? ', expires ' + expiresAt.toDateString() : ''})`
       };
     }
     
     case 'memory_recall': {
-      const { query, limit } = args;
+      const { query, limit, maxTokens } = args;
+      
+      if (maxTokens) {
+        // Budget-aware retrieval
+        const db = muninn['db'];
+        const result = await retrieveWithBudget(db, query, { maxTokens });
+        return {
+          source: 'budget',
+          profile: result.profile,
+          memories: result.memories,
+          tokensUsed: result.tokensUsed,
+          tokensRemaining: result.tokensRemaining,
+          formatted: formatForContext(result)
+        };
+      }
+      
+      // Standard retrieval
       const result = await muninn.recall(query, { limit: limit || 10 });
       
       return {
@@ -199,15 +281,63 @@ async function handleToolCall(name: string, args: any): Promise<any> {
     }
     
     case 'memory_briefing': {
-      const { context } = args;
+      const { context, maxTokens } = args;
+      const db = muninn['db'];
       
-      // Get recent facts
-      // For now, return a placeholder - will need to implement proper briefing
+      // Use budget-aware briefing
+      const briefing = await memoryBriefingWithBudget(db, context || 'session start', maxTokens || 500);
+      
       return {
-        context: context || 'general',
-        summary: 'Muninn v2 briefing ready',
-        message: 'Use memory_recall for specific queries, memory_evolution for changes, memory_path for relationships'
+        context: context || 'session start',
+        briefing,
+        tokenCount: Math.ceil(briefing.length / 4)
       };
+    }
+    
+    case 'memory_profile': {
+      const { maxStaticFacts, maxDynamicFacts } = args;
+      const db = muninn['db'];
+      
+      const profile = await getProfile(db, {
+        maxStaticFacts: maxStaticFacts || 10,
+        maxDynamicFacts: maxDynamicFacts || 5
+      });
+      
+      return {
+        static: profile.static,
+        dynamic: profile.dynamic,
+        tokenCount: profile.tokenCount,
+        formatted: formatProfile(profile)
+      };
+    }
+    
+    case 'memory_forget': {
+      const { action } = args;
+      const db = muninn['db'];
+      
+      if (action === 'list') {
+        const expiring = await getExpiringFacts(db, 7);
+        return {
+          action: 'list',
+          expiringCount: expiring.length,
+          facts: expiring.map(f => ({
+            content: f.content,
+            expiresAt: f.expires_at?.toISOString(),
+            type: f.memory_type
+          }))
+        };
+      }
+      
+      if (action === 'expire' || action === 'decay') {
+        const result = await runForgettingCycle(db);
+        return {
+          action,
+          ...result,
+          message: `Forgot ${result.totalForgotten} facts (${result.expired} expired, ${result.decayed} decayed)`
+        };
+      }
+      
+      return { error: 'Invalid action. Use: expire, decay, or list' };
     }
     
     case 'memory_evolution': {
