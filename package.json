@@ -1,7 +1,12 @@
 {
   "name": "muninn-v2",
-  "version": "0.1.0",
-  "description": "Memory as evolving reality - Zep-inspired bi-temporal knowledge graph",
+  "version": "5.3.0",
+  "description": "Memory as evolving reality - Bi-temporal knowledge graph with Supermemory parity",
+  "homepage": "https://muninn.au",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Phillipneho/muninn.git"
+  },
   "type": "module",
   "main": "dist/index.js",
   "bin": {
