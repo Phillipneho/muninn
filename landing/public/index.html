@@ -216,6 +216,10 @@
             gap: 24px;
         }
 
+        @media (max-width: 968px) {
+            .feature-grid { grid-template-columns: 1fr; }
+        }
+
         .feature-card {
             background: var(--obsidian-card);
             backdrop-filter: blur(20px);
@@ -539,7 +543,7 @@
                 </h1>
                 <p class="hero-subtitle">
                     Store, retrieve, and reason over memories across sessions. 
-                    Entity extraction, temporal reasoning, and hybrid search.
+                    5x compression, entity extraction, temporal reasoning, and hybrid search.
                 </p>
                 <a href="https://www.muninn.au/dashboard" class="cta-primary">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -578,6 +582,12 @@
                 </div>
 
                 <div class="feature-card">
+                    <div class="feature-icon">🗜️</div>
+                    <h3>TurboQuant Compression</h3>
+                    <p>5x storage reduction with 94% similarity retention. Open-source vector quantization from Google Research.</p>
+                </div>
+
+                <div class="feature-card">
                     <div class="feature-icon">🔍</div>
                     <h3>Hybrid Search</h3>
                     <p>BM25 + semantic embeddings with reciprocal rank fusion. Millisecond retrieval.</p>
@@ -593,6 +603,18 @@
                     <div class="feature-icon">⚠️</div>
                     <h3>Contradiction Detection</h3>
                     <p>Flags when new information conflicts with stored memories. Resolution built-in.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🌐</div>
+                    <h3>Cloud + Local</h3>
+                    <p>Free SQLite locally or hosted PostgreSQL in the cloud. Your data, your choice.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🔌</div>
+                    <h3>MCP Native</h3>
+                    <p>Works with any agent framework via MCP. Open protocol, no lock-in.</p>
                 </div>
             </div>
         </div>
@@ -617,16 +639,16 @@
 
                     <div class="graph-stats">
                         <div class="stat-item">
-                            <h4>162</h4>
-                            <p>Entities Tracked</p>
+                            <h4>5x</h4>
+                            <p>Compression</p>
                         </div>
                         <div class="stat-item">
-                            <h4>247</h4>
-                            <p>Relationships</p>
+                            <h4>94%</h4>
+                            <p>Similarity Retention</p>
                         </div>
                         <div class="stat-item">
-                            <h4>99%</h4>
-                            <p>Token Reduction</p>
+                            <h4>93%</h4>
+                            <p>LOCOMO Score</p>
                         </div>
                     </div>
                 </div>
@@ -676,6 +698,7 @@
                         <li>Full memory system</li>
                         <li>Local SQLite database</li>
                         <li>Ollama embeddings (no API keys)</li>
+                        <li>TurboQuant compression (5x)</li>
                         <li>Entity extraction</li>
                         <li>Knowledge graph</li>
                         <li>Temporal reasoning</li>
