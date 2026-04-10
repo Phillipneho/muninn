@@ -89,17 +89,17 @@ export default {
 ```bash
 # Trigger manually
 curl -X POST "https://api.muninn.au/api/admin/sleep-cycle" \
-  -H "Authorization: Bearer muninn_729186836cbd4aada2352cb4c06c4ef0" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "X-Organization-ID: leo-default"
 
 # Check status
 curl "https://api.muninn.au/api/sleep-cycle/status" \
-  -H "Authorization: Bearer muninn_729186836cbd4aada2352cb4c06c4ef0" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "X-Organization-ID: leo-default"
 
 # Get entity profile
 curl "https://api.muninn.au/api/entities/{entity_id}/profile" \
-  -H "Authorization: Bearer muninn_729186836cbd4aada2352cb4c06c4ef0" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "X-Organization-ID: leo-default"
 ```
 
