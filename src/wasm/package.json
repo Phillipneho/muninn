@@ -1,0 +1,17 @@
+{
+  "name": "isoquant-wasm",
+  "type": "module",
+  "description": "IsoQuant compression for embeddings - WASM port",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "isoquant_wasm_bg.wasm",
+    "isoquant_wasm.js",
+    "isoquant_wasm.d.ts"
+  ],
+  "main": "isoquant_wasm.js",
+  "types": "isoquant_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

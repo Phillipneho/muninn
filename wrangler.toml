@@ -1,0 +1,33 @@
+name = "muninn"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+account_id = "f41284de76d5ead189b5b3500a08173f"
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "muninn-db"
+database_id = "4baf9390-37b6-4e10-aaac-ee2dae34f815"
+
+[vars]
+ENVIRONMENT = "production"
+
+# Ollama Cloud API key for high-quality extraction (optional, defaults to Workers AI)
+# Set via: wrangler secret put OLLAMA_API_KEY
+# Or add to .dev.vars for local development
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "muninn-embeddings-v2"
+
+# Scheduled triggers for sleep cycle
+[triggers]
+crons = ["0 2 * * *"]  # Run at 2:00 AM UTC daily
+
+# Custom domain routes - uncomment after adding muninn.au to Cloudflare
+# [[routes]]
+# pattern = "api.muninn.au/*"
+# zone_name = "muninn.au"

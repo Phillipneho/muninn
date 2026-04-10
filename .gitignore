@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.wrangler/
+
+# Environment files
+.dev.vars
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test results
+benchmark-results*.json
+*.db
+*.db-journal
+
+# Secrets (never commit)
+*.pem
+*.key
+credentials/
+
+# WASM build artifacts
+wasm/target/
+
+# Benchmark results (large files)
+benchmark-hybrid-results.json
+benchmark-results*.json
