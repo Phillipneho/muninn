@@ -4932,6 +4932,177 @@ app.post('/api/admin/clear', authMiddleware, async (c) => {
   }
 })
 
+// Delete facts for specific entities (for re-extraction)
+app.delete('/api/admin/facts/by-entity/:entity', authMiddleware, async (c) => {
+  const orgId = c.get('orgId')
+  const entityName = c.req.param('entity')
+  const confirm = c.req.query('confirm')
+  
+  if (confirm !== 'true') {
+    return c.json({ success: false, error: 'Missing confirm=true parameter' }, 400)
+  }
+  
+  try {
+    // Delete facts where subject = entity
+    const result = await c.env.DB.prepare(
+      'DELETE FROM facts WHERE organization_id = ? AND subject = ?'
+    ).bind(orgId, entityName).run()
+    
+    console.log(`[DELETE-FACTS] Deleted ${result.meta?.changes || 0} facts for entity: ${entityName}`)
+    
+    return c.json({
+      success: true,
+      entity: entityName,
+      deleted: result.meta?.changes || 0
+    })
+  } catch (error: any) {
+    console.error('[DELETE-FACTS] Error:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// PDS Classification Migration - Fix facts with pds_decimal='0000'
+app.post('/api/admin/migrate-pds', authMiddleware, async (c) => {
+  const orgId = c.get('orgId')
+  const body = await c.req.json().catch(() => ({}))
+  const { limit = 500 } = body
+  
+  // PDS Taxonomy - Predicate to PDS mapping
+  const PREDICATE_TO_PDS: Record<string, string> = {
+    // 1000 - Internal State
+    'identifies_as': '1201', 'has_identity': '1201', 'has_gender': '1201',
+    'has_nationality': '1201', 'has_occupation': '1201', 'has_trait': '1301',
+    'has_personality': '1301', 'prefers': '1401', 'likes': '1401', 'dislikes': '1401',
+    'has_hobby': '1401', 'activity': '1401', 'kids_like': '1401', 'has_inclusivity': '1401',
+    
+    // 2000 - Relational Orbit
+    'has_relationship_status': '2101', 'married_to': '2101', 'married_for': '2101',
+    'dating': '2101', 'has_child': '2101', 'has_partner': '2101', 'family_of': '2201',
+    'friend_of': '2301', 'interacts_with': '2301', 'is_supportive_to': '2301',
+    'known_for_duration': '2301', 'known_for': '2301', 'has_meetup': '2301',
+    'has_support': '2101',
+    
+    // 3000 - Instrumental
+    'works_at': '3101', 'researched': '3101', 'has_goal': '3101', 'intends_to': '3101',
+    'creates': '3201', 'creates_art': '3201', 'creates_content': '3201',
+    'volunteers': '3301', 'participates_in': '3301', 'participated_in': '3301',
+    'has_achievement': '3401', 'achieved_on': '3401', 'has_institution': '3101',
+    
+    // 4000 - Chronological
+    'occurred_on': '4101', 'attended_on': '4101', 'visited': '4101', 'went_to': '4101',
+    'started_on': '4401', 'started_activity': '4401', 'ended_on': '4401',
+    'moved_from': '4401', 'moved_to': '4401', 'camped_at': '4101',
+    'has_duration': '4201', 'completed_on': '4401', 'completed': '4401',
+    'applied_to': '4101', 'signed_up_for': '4101', 'experienced': '4101',
+    'encountered': '4101', 'joined': '4101', 'realized': '4101',
+    'has_activity': '1401', 'has_location': '4401', 'has_possession': '1401',
+    'possesses': '1401', 'pet': '1401',
+    
+    // Fallback
+    'has': '0000', 'mentioned': '0000'
+  }
+  
+  // Infer PDS from predicate patterns
+  function inferPdsCode(predicate: string): string {
+    const pred = predicate.toLowerCase()
+    
+    if (pred.includes('identity') || pred.includes('gender') || pred.includes('nationality')) return '1201'
+    if (pred.includes('trait') || pred.includes('personality')) return '1301'
+    if (pred.includes('relationship') || pred.includes('married') || pred.includes('partner')) return '2101'
+    if (pred.includes('child') || pred.includes('family')) return '2101'
+    if (pred.includes('friend') || pred.includes('interact') || pred.includes('support')) return '2301'
+    if (pred.includes('attend') || pred.includes('visit') || pred.includes('occur')) return '4101'
+    if (pred.includes('start') || pred.includes('begin') || pred.includes('move')) return '4401'
+    if (pred.includes('work') || pred.includes('research') || pred.includes('goal')) return '3101'
+    if (pred.includes('create') || pred.includes('make')) return '3201'
+    if (pred.includes('like') || pred.includes('prefer') || pred.includes('hobby')) return '1401'
+    
+    return '0000'
+  }
+  
+  // Detect entity linkage
+  function detectEntityLinkage(predicate: string, object: string): string | null {
+    const personNames = [
+      'Caroline', 'Melanie', 'John', 'Maria', 'Joanna', 'Nate', 'Tim',
+      'Audrey', 'Andrew', 'James', 'Deborah', 'Jolene', 'Evan', 'Sam',
+      'Calvin', 'Dave', 'Gina', 'Jon'
+    ]
+    
+    const objStr = (object || '').toString()
+    const isPersonObject = personNames.some(name => objStr.includes(name))
+    
+    if (!isPersonObject) return null
+    
+    const pred = predicate.toLowerCase()
+    if (pred.includes('support') || pred.includes('friend') || pred.includes('interact')) return '2300'
+    if (pred.includes('family') || pred.includes('married') || pred.includes('partner')) return '2100'
+    
+    return null
+  }
+  
+  try {
+    // Get all facts with pds_decimal='0000'
+    const facts = await c.env.DB.prepare(`
+      SELECT id, subject, predicate, object_value, pds_decimal
+      FROM facts
+      WHERE organization_id = ? AND pds_decimal = '0000'
+      LIMIT ?
+    `).bind(orgId, limit).all()
+    
+    const result = {
+      total: facts.results?.length || 0,
+      updated: 0,
+      skipped: 0,
+      errors: [] as string[]
+    }
+    
+    console.log(`[PDS-MIGRATE] Found ${result.total} facts with pds_decimal='0000'`)
+    
+    for (const fact of (facts.results || []) as any[]) {
+      const predicate = fact.predicate || ''
+      
+      // Look up PDS code
+      let pds_decimal = PREDICATE_TO_PDS[predicate] || '0000'
+      
+      // Infer from patterns if not found
+      if (pds_decimal === '0000') {
+        pds_decimal = inferPdsCode(predicate)
+      }
+      
+      // Skip if still unclassified
+      if (pds_decimal === '0000') {
+        result.skipped++
+        continue
+      }
+      
+      // Get PDS domain
+      const pds_domain = pds_decimal.substring(0, 1) + '000'
+      
+      // Detect entity linkage
+      const related_pds = detectEntityLinkage(predicate, fact.object_value || '')
+      
+      // Update fact
+      await c.env.DB.prepare(`
+        UPDATE facts
+        SET pds_decimal = ?, pds_domain = ?, related_pds = ?
+        WHERE id = ?
+      `).bind(pds_decimal, pds_domain, related_pds, fact.id).run()
+      
+      result.updated++
+    }
+    
+    console.log(`[PDS-MIGRATE] Updated ${result.updated}, skipped ${result.skipped}`)
+    
+    return c.json({
+      success: true,
+      ...result
+    })
+  } catch (error: any) {
+    console.error('[PDS-MIGRATE] Error:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
 // Backfill preprocessing for existing memories
 app.post('/api/admin/backfill-preprocessing', authMiddleware, async (c) => {
   const orgId = c.get('orgId')
@@ -5027,4 +5198,583 @@ app.post('/api/admin/backfill-preprocessing', authMiddleware, async (c) => {
   }
 })
 
+// ========== FACT INSERTION ENDPOINT ==========
+// Direct fact insertion for background extraction (separate from ingestion)
+app.post('/api/facts', authMiddleware, async (c) => {
+  const orgId = c.get('orgId')
+  const body = await c.req.json()
+  
+  const { facts, entities, source_session_id } = body
+  
+  if (!facts || !Array.isArray(facts) || facts.length === 0) {
+    return c.json({ error: 'Facts array required' }, 400)
+  }
+  
+  console.log(`[FACTS] Inserting ${facts.length} facts for org ${orgId}`)
+  
+  const entityIdMap = new Map<string, string>()
+  const episodeId = source_session_id || crypto.randomUUID()
+  
+  // Create or resolve entities
+  for (const entity of (entities || [])) {
+    // Check if entity exists first
+    const existing = await c.env.DB.prepare(
+      'SELECT id FROM entities WHERE name = ? AND organization_id = ?'
+    ).bind(entity.name, orgId).first()
+    
+    if (existing) {
+      entityIdMap.set(entity.name.toLowerCase(), existing.id as string)
+    } else {
+      // Create new entity
+      const entityId = crypto.randomUUID()
+      await c.env.DB.prepare(`
+        INSERT INTO entities (id, name, type, organization_id, created_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+      `).bind(entityId, entity.name, entity.type || 'person', orgId).run()
+      entityIdMap.set(entity.name.toLowerCase(), entityId)
+    }
+  }
+  
+  // Insert facts (with deduplication)
+  const insertedFacts = []
+  for (const fact of facts) {
+    const subjectEntityId = entityIdMap.get(fact.subject?.toLowerCase()) || crypto.randomUUID()
+    
+    // Ensure subject entity exists
+    await c.env.DB.prepare(`
+      INSERT OR IGNORE INTO entities (id, name, type, organization_id, created_at)
+      VALUES (?, ?, 'person', ?, datetime('now'))
+    `).bind(subjectEntityId, fact.subject, orgId).run()
+    
+    // Check for duplicate fact (same subject, predicate, object, PDS code)
+    const existing = await c.env.DB.prepare(`
+      SELECT id FROM facts 
+      WHERE subject_entity_id = ? 
+        AND predicate = ? 
+        AND object_value = ?
+        AND pds_decimal = ?
+        AND organization_id = ?
+        AND is_current = 1
+    `).bind(
+      subjectEntityId,
+      fact.predicate,
+      fact.object || fact.object_value || '',
+      fact.pds_decimal || '0000',
+      orgId
+    ).first()
+    
+    if (existing) {
+      console.log(`[FACTS] Skipping duplicate fact: ${fact.subject} ${fact.predicate} ${fact.object}`)
+      continue
+    }
+    
+    const factId = crypto.randomUUID()
+    const pdsDecimal = fact.pds_decimal || '0000'
+    const pdsDomain = pdsDecimal.substring(0, 1) + '00'
+    
+    try {
+      await c.env.DB.prepare(`
+        INSERT INTO facts (
+          id, subject_entity_id, predicate, object_entity_id, object_value, value_type,
+          confidence, source_episode_id, valid_from, evidence,
+          organization_id, pds_code, pds_decimal, pds_domain, related_pds, is_current
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      `).bind(
+        factId,
+        subjectEntityId,
+        fact.predicate,
+        null, // object_entity_id
+        fact.object || fact.object_value || '',
+        fact.objectType || 'string',
+        fact.confidence || 0.8,
+        null, // source_episode_id - NULL for standalone fact inserts
+        fact.validFrom || fact.valid_from || null,
+        fact.evidence || '',
+        orgId,
+        null, // pds_code (legacy)
+        pdsDecimal,
+        pdsDomain,
+        null // related_pds
+      ).run()
+      
+      insertedFacts.push({
+        id: factId,
+        subject: fact.subject,
+        predicate: fact.predicate,
+        object: fact.object || fact.object_value,
+        pds_decimal: pdsDecimal,
+        pds_domain: pdsDomain
+      })
+    } catch (e) {
+      console.error(`[FACTS] Error inserting fact:`, e)
+    }
+  }
+  
+  return c.json({
+    success: true,
+    inserted: insertedFacts.length,
+    facts: insertedFacts
+  })
+})
+
+// ========== TEMPORAL QUERY ENDPOINT ==========
+// Query facts valid at a specific point in time
+app.get('/api/facts/temporal', authMiddleware, async (c) => {
+  const orgId = c.get('orgId')
+  const entity = c.req.query('entity') || ''
+  const atDate = c.req.query('at') || '' // ISO date: 2023-08-15
+  const predicate = c.req.query('predicate') || ''
+  const limit = parseInt(c.req.query('limit') || '50')
+  
+  if (!entity) {
+    return c.json({ error: 'Entity parameter required' }, 400)
+  }
+  
+  if (!atDate) {
+    return c.json({ error: 'at parameter required (ISO date: 2023-08-15)' }, 400)
+  }
+  
+  // Validate date format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(atDate)) {
+    return c.json({ error: 'Invalid date format. Use YYYY-MM-DD' }, 400)
+  }
+  
+  console.log(`[TEMPORAL_QUERY] Entity: "${entity}", At: "${atDate}", Predicate: "${predicate}"`)
+  
+  // Query facts where:
+  // 1. valid_from <= atDate (fact became true before or on this date)
+  // 2. valid_until IS NULL OR valid_until >= atDate (fact is still true)
+  // Note: invalidated_at is metadata - we still return the fact if valid_until covers the date
+  let sql = `
+    SELECT f.id, f.predicate, f.object_value as object, f.valid_from, f.valid_until, f.confidence, f.evidence, f.pds_decimal,
+           e.name as subject
+    FROM facts f
+    JOIN entities e ON f.subject_entity_id = e.id
+    WHERE f.organization_id = ?
+      AND e.name = ?
+      AND f.valid_from <= ?
+      AND (f.valid_until IS NULL OR f.valid_until >= ?)
+  `
+  const params: any[] = [orgId, entity, atDate, atDate]
+  
+  if (predicate) {
+    sql += ` AND f.predicate = ?`
+    params.push(predicate)
+  }
+  
+  sql += ` ORDER BY f.valid_from DESC LIMIT ?`
+  params.push(limit)
+  
+  const result = await c.env.DB.prepare(sql).bind(...params).all()
+  
+  return c.json({
+    entity,
+    at: atDate,
+    facts: result.results || [],
+    total: (result.results || []).length
+  })
+})
+
+// ========== FACT INVALIDATION ENDPOINT ==========
+// Mark a fact as no longer true (set valid_until)
+app.post('/api/facts/:id/invalidate', authMiddleware, async (c) => {
+  const orgId = c.get('orgId')
+  const factId = c.req.param('id')
+  const body = await c.req.json().catch(() => ({}))
+  const { valid_until, reason } = body
+  
+  if (!valid_until) {
+    return c.json({ error: 'valid_until date required (ISO-8601: YYYY-MM-DD)' }, 400)
+  }
+  
+  // Verify fact exists and belongs to org
+  const fact = await c.env.DB.prepare(
+    'SELECT f.id, f.predicate, f.object_value, e.name as subject FROM facts f JOIN entities e ON f.subject_entity_id = e.id WHERE f.id = ? AND f.organization_id = ?'
+  ).bind(factId, orgId).first()
+  
+  if (!fact) {
+    return c.json({ error: 'Fact not found' }, 404)
+  }
+  
+  // Update valid_until
+  await c.env.DB.prepare(
+    'UPDATE facts SET valid_until = ?, invalidated_at = datetime(\'now\') WHERE id = ?'
+  ).bind(valid_until, factId).run()
+  
+  console.log(`[FACT_INVALIDATE] ${fact.subject} ${fact.predicate} ${fact.object_value} -> ${valid_until}`)
+  
+  return c.json({
+    success: true,
+    fact: {
+      id: factId,
+      subject: fact.subject,
+      predicate: fact.predicate,
+      object: fact.object_value,
+      valid_until
+    },
+    reason: reason || 'Fact no longer true'
+  })
+})
+
+// ========== MULTI-HOP REASONING ENDPOINT ==========
+// Chain multiple facts to answer complex questions
+app.post('/api/reason/multi-hop', authMiddleware, async (c) => {
+  const orgId = c.get('orgId')
+  const body = await c.req.json()
+  const { query, entities, hops = 3 } = body
+  
+  if (!query) {
+    return c.json({ error: 'query required' }, 400)
+  }
+  
+  // Step 1: Find seed facts matching query terms
+  const queryTerms = query.toLowerCase().split(/\s+/)
+  const entityFilter = entities && entities.length > 0 
+    ? `AND e.name IN (${entities.map(() => '?').join(',')})` 
+    : ''
+  
+  const entityParams = entities || []
+  
+  // Get seed facts
+  let sql = `
+    SELECT f.id, e.name as subject, f.predicate, f.object_value as object, f.pds_decimal, f.valid_from
+    FROM facts f
+    JOIN entities e ON f.subject_entity_id = e.id
+    WHERE f.organization_id = ?
+      AND f.valid_until IS NULL
+      ${entityFilter}
+    ORDER BY f.pds_decimal
+    LIMIT 50
+  `
+  
+  const seedFacts = await c.env.DB.prepare(sql).bind(orgId, ...entityParams).all()
+  
+  // Step 2: Build fact graph - find connected facts
+  const factGraph = new Map<string, Set<string>>()
+  const allFacts = new Map<string, any>()
+  
+  for (const fact of (seedFacts.results || [])) {
+    allFacts.set(fact.id, fact)
+    
+    // Connect facts about same subject
+    const key = fact.subject
+    if (!factGraph.has(key)) factGraph.set(key, new Set())
+    
+    // Connect facts about same object
+    const objectKey = fact.object?.toLowerCase()
+    if (objectKey && objectKey.length > 2) {
+      if (!factGraph.has(objectKey)) factGraph.set(objectKey, new Set())
+      factGraph.get(key)!.add(fact.id)
+      factGraph.get(objectKey)!.add(fact.id)
+    }
+  }
+  
+  // Step 3: Find paths between entities
+  const paths: { facts: any[], reasoning: string }[] = []
+  
+  if (entities && entities.length >= 2) {
+    // Find common connections
+    const [entity1, entity2] = entities
+    const entity1Facts = (seedFacts.results || []).filter((f: any) => f.subject === entity1)
+    const entity2Facts = (seedFacts.results || []).filter((f: any) => f.subject === entity2)
+    
+    // Find shared objects (relationships)
+    const entity1Objects = new Set(entity1Facts.map((f: any) => f.object?.toLowerCase()).filter(Boolean))
+    const sharedObjects = entity2Facts
+      .filter((f: any) => entity1Objects.has(f.object?.toLowerCase()))
+      .map((f: any) => f.object)
+    
+    if (sharedObjects.length > 0) {
+      paths.push({
+        facts: [...entity1Facts.slice(0, 3), ...entity2Facts.slice(0, 3)],
+        reasoning: `${entity1} and ${entity2} share: ${sharedObjects.slice(0, 3).join(', ')}`
+      })
+    }
+  }
+  
+  // Step 4: Score relevance to query
+  const relevantFacts = (seedFacts.results || []).map((fact: any) => {
+    let score = 0
+    for (const term of queryTerms) {
+      if (fact.predicate?.toLowerCase().includes(term)) score += 2
+      if (fact.object?.toLowerCase().includes(term)) score += 1
+    }
+    return { ...fact, relevanceScore: score }
+  }).filter((f: any) => f.relevanceScore > 0)
+    .sort((a: any, b: any) => b.relevanceScore - a.relevanceScore)
+    .slice(0, 20)
+  
+  return c.json({
+    query,
+    entities: entities || [],
+    seedFacts: seedFacts.results?.slice(0, 10),
+    relevantFacts: relevantFacts.slice(0, 10),
+    paths,
+    totalFacts: allFacts.size,
+    hopLimit: hops
+  })
+})
+
+// ========== REASONING CHAIN ENDPOINT ==========
+// Answer "Would X do Y?" questions by chaining facts
+app.post('/api/reason/counterfactual', authMiddleware, async (c) => {
+  const orgId = c.get('orgId')
+  const body = await c.req.json()
+  const { subject, action, condition } = body
+  
+  // Get all facts about subject
+  const facts = await c.env.DB.prepare(`
+    SELECT f.id, e.name as subject, f.predicate, f.object_value as object, f.pds_decimal, f.valid_from
+    FROM facts f
+    JOIN entities e ON f.subject_entity_id = e.id
+    WHERE e.name = ? AND f.organization_id = ? AND f.valid_until IS NULL
+    ORDER BY f.pds_decimal
+  `).bind(subject, orgId).all()
+  
+  const subjectFacts = facts.results || []
+  
+  // Extract relevant facts for reasoning
+  const identityFacts = subjectFacts.filter((f: any) => f.predicate === 'has_identity')
+  const activityFacts = subjectFacts.filter((f: any) => f.predicate === 'activity' || f.predicate === 'known_for')
+  const preferenceFacts = subjectFacts.filter((f: any) => f.predicate?.includes('prefer') || f.predicate === 'kids_like' || f.object?.toLowerCase().includes('like'))
+  const supportFacts = subjectFacts.filter((f: any) => 
+    f.object?.toLowerCase().includes('support') || 
+    f.predicate?.includes('receive') ||
+    f.object?.toLowerCase().includes('help')
+  )
+  
+  // Build reasoning
+  const reasoning: { step: number, fact: any, inference: string }[] = []
+  
+  // Step 1: Identity
+  if (identityFacts.length > 0) {
+    reasoning.push({
+      step: 1,
+      fact: identityFacts[0],
+      inference: `${subject} is ${identityFacts.map((f: any) => f.object).join(' and ')}`
+    })
+  }
+  
+  // Step 2: Activities/Interests
+  if (activityFacts.length > 0) {
+    reasoning.push({
+      step: 2,
+      fact: activityFacts[0],
+      inference: `${subject} ${activityFacts[0].predicate === 'known_for' ? 'is known for' : 'does'}: ${activityFacts.slice(0, 3).map((f: any) => f.object).join(', ')}`
+    })
+  }
+  
+  // Step 3: Support/Context
+  if (supportFacts.length > 0) {
+    reasoning.push({
+      step: 3,
+      fact: supportFacts[0],
+      inference: `${subject} received: ${supportFacts.map((f: any) => f.object).join(', ')}`
+    })
+  }
+  
+  // Generate answer
+  let answer = 'Insufficient facts to reason'
+  
+  if (condition && supportFacts.length > 0) {
+    answer = `Based on ${subject}'s background (${identityFacts[0]?.object || 'unknown identity'}), the answer depends on whether "${condition}" is true. With current context: ${supportFacts[0]?.object || 'no relevant context'}.`
+  }
+  
+  return c.json({
+    subject,
+    action,
+    condition,
+    identityFacts: identityFacts.slice(0, 5),
+    activityFacts: activityFacts.slice(0, 5),
+    supportFacts: supportFacts.slice(0, 5),
+    reasoning,
+    answer
+  })
+})
+
+
+// ========== PREDICATE CHAIN MULTI-HOP ENDPOINT ==========
+// Traverse predicate chains for complex queries
+app.post('/api/facts/predicate-chain', authMiddleware, async (c) => {
+  const orgId = c.get('orgId')
+  const body = await c.req.json()
+  const { start_entity, predicates, at } = body
+  
+  if (!start_entity || !predicates || !Array.isArray(predicates) || predicates.length === 0) {
+    return c.json({ 
+      error: 'start_entity and predicates array required',
+      example: { start_entity: 'Melanie', predicates: ['has_child', 'kids_like'] }
+    }, 400)
+  }
+  
+  // Resolve start entity
+  const entity = await c.env.DB.prepare(
+    'SELECT id, name FROM entities WHERE name = ? AND organization_id = ?'
+  ).bind(start_entity, orgId).first()
+  
+  if (!entity) {
+    return c.json({ error: `Entity '${start_entity}' not found` }, 404)
+  }
+  
+  // Traverse predicate chain
+  const path: Array<{
+    hop: number
+    subject: string
+    subject_id: string
+    predicate: string
+    object: string
+    object_entity?: string
+    valid_from?: string
+  }> = []
+  
+  let currentEntityId = entity.id as string
+  let currentEntityName = entity.name as string
+  
+  for (let i = 0; i < predicates.length; i++) {
+    const predicate = predicates[i]
+    
+    // Build query for this hop
+    let sql = `
+      SELECT f.id, f.predicate, f.object_value, f.valid_from, e.name as subject_name
+      FROM facts f
+      JOIN entities e ON f.subject_entity_id = e.id
+      WHERE f.subject_entity_id = ?
+        AND f.predicate = ?
+        AND f.organization_id = ?
+    `
+    const params: any[] = [currentEntityId, predicate, orgId]
+    
+    // Add temporal filter if provided
+    if (at) {
+      sql += ' AND f.valid_from <= ? AND (f.valid_until IS NULL OR f.valid_until >= ?)'
+      params.push(at, at)
+    }
+    
+    sql += ' LIMIT 1'
+    
+    const fact = await c.env.DB.prepare(sql).bind(...params).first()
+    
+    if (!fact) {
+      // No fact found - return path so far with incomplete flag
+      return c.json({
+        start_entity,
+        predicates,
+        at,
+        path,
+        hops_completed: i,
+        hops_requested: predicates.length,
+        complete: false,
+        result: null,
+        message: `No fact found for predicate '${predicate}' at hop ${i + 1}`
+      })
+    }
+    
+    // Check if object references another entity
+    const objectEntity = await c.env.DB.prepare(
+      'SELECT id, name FROM entities WHERE name = ? AND organization_id = ?'
+    ).bind(fact.object_value, orgId).first()
+    
+    path.push({
+      hop: i + 1,
+      subject: currentEntityName,
+      subject_id: currentEntityId,
+      predicate: fact.predicate as string,
+      object: fact.object_value as string,
+      object_entity: objectEntity ? (objectEntity.name as string) : undefined,
+      valid_from: fact.valid_from as string | undefined
+    })
+    
+    // Move to next entity if applicable
+    if (objectEntity) {
+      currentEntityId = objectEntity.id as string
+      currentEntityName = objectEntity.name as string
+    }
+  }
+  
+  // Return result
+  const finalHop = path[path.length - 1]
+  
+  return c.json({
+    start_entity,
+    predicates,
+    at,
+    path,
+    hops_completed: path.length,
+    hops_requested: predicates.length,
+    complete: true,
+    result: finalHop.object,
+    result_entity: finalHop.object_entity
+  })
+})
+
+
+// ========== TEMPORAL EXTRACTION ENDPOINT ==========
+// Extract dates from object values for "when" questions
+app.get("/api/facts/when", authMiddleware, async (c) => {
+  const orgId = c.get("orgId")
+  const entity = c.req.query("entity") || ""
+  const query = c.req.query("q") || ""
+  const limit = parseInt(c.req.query("limit") || "20")
+  
+  if (!entity) {
+    return c.json({ error: "Entity parameter required" }, 400)
+  }
+  
+  console.log(`[WHEN_QUERY] Entity: "${entity}", Query: "${query}"`)
+  
+  // Get all facts for this entity
+  const allFacts = await c.env.DB.prepare(`
+    SELECT f.id, f.predicate, f.object_value as object, f.valid_from, f.evidence
+    FROM facts f
+    JOIN entities e ON f.subject_entity_id = e.id
+    WHERE e.name = ? AND f.organization_id = ? AND f.invalidated_at IS NULL
+  `).bind(entity, orgId).all()
+  
+  // Extract dates from object values
+  const datePattern = /\d{4}-\d{2}-\d{2}/g
+  const monthPattern = /(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}/gi
+  const yearPattern = /\b20\d{2}\b/g
+  
+  const results = []
+  
+  for (const fact of (allFacts.results || [])) {
+    const obj = fact.object || ""
+    
+    // Check for explicit dates in object
+    const dateMatch = obj.match(datePattern)
+    const monthMatch = obj.match(monthPattern)
+    const yearMatch = obj.match(yearPattern)
+    
+    // Check predicate for temporal hints
+    const isTemporalPredicate = /attend|occur|happen|went|visit|start|end|move|join|leave/i.test(fact.predicate)
+    
+    // Check query terms
+    const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2)
+    const objLower = obj.toLowerCase()
+    const matchesQuery = queryTerms.some(t => objLower.includes(t) || fact.predicate.toLowerCase().includes(t))
+    
+    if ((dateMatch || monthMatch || yearMatch || isTemporalPredicate) && (matchesQuery || !query)) {
+      results.push({
+        ...fact,
+        extracted_dates: dateMatch || monthMatch || yearMatch || [],
+        relevance: matchesQuery ? 2 : (isTemporalPredicate ? 1 : 0)
+      })
+    }
+  }
+  
+  // Sort by relevance
+  results.sort((a, b) => b.relevance - a.relevance)
+  
+  return c.json({
+    entity,
+    query,
+    results: results.slice(0, limit).map(r => ({
+      predicate: r.predicate,
+      object: r.object,
+      valid_from: r.valid_from,
+      extracted_dates: r.extracted_dates
+    })),
+    total: results.length
+  })
+})
 export default app
