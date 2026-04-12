@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "muninn-sdk"
+version = "2.0.0"
+description = "Python SDK for Muninn - Agent memory system with 99.1% LOCOMO accuracy. Edge-native, persistent memory for AI agents."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Phillipneho", email = "kh@agentmail.to"}
+]
+keywords = [
+    "muninn",
+    "memory",
+    "agents",
+    "ai",
+    "langchain",
+    "llamaindex",
+    "embedding",
+    "semantic-search",
+    "locomo",
+    "edge-native",
+    "cloudflare"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "httpx>=0.24.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+langchain = [
+    "langchain>=0.1.0",
+]
+llamaindex = [
+    "llama-index>=0.10.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://muninn.au"
+Documentation = "https://clawhub.ai/skill/muninn-skill"
+Repository = "https://github.com/Phillipneho/muninn"
+Issues = "https://github.com/Phillipneho/muninn/issues"
+
+[project.entry-points."langchain.memory"]
+muninn = "muninn.langchain:MuninnMemory"
+muninn_entity = "muninn.langchain:MuninnEntityMemory"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["muninn*"]
+
+[tool.black]
+line-length = 88
+target-version = ["py39", "py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
